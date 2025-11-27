@@ -2,14 +2,15 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// 屏幕尺寸
+// 屏幕尺寸 (与Python版本保持一致)
 const SCREEN_WIDTH = 800;
 const SCREEN_HEIGHT = 600;
 
+// 确保Canvas尺寸正确
 canvas.width = SCREEN_WIDTH;
 canvas.height = SCREEN_HEIGHT;
 
-// 颜色 (RGB)
+// 颜色 (与Python版本保持一致)
 const WHITE = 'rgb(255, 255, 255)';
 const BLACK = 'rgb(0, 0, 0)';
 const RED = 'rgb(255, 0, 0)';
@@ -20,24 +21,23 @@ const GRAY = 'rgb(128, 128, 128)';
 const DARK_GRAY = 'rgb(64, 64, 64)';
 const LIGHT_GRAY = 'rgb(192, 192, 192)';
 
-// 墙的尺寸
+// 墙的尺寸 (与Python版本保持一致)
 const WALL_SIZE = 20;
 
-// 游戏状态
-let game_over = false;
-let winner = null;
-
-// 游戏时钟 (用于帧率控制)
-let lastTime = 0;
-let deltaTime = 0;
-const FPS = 30;
-const frameDelay = 1000 / FPS;
-
-// 用于绘制子弹路线和爆炸效果的OffscreenCanvas
-const effectCanvas = new OffscreenCanvas(SCREEN_WIDTH, SCREEN_HEIGHT);
+// 全局的effect_canvas，用于记录子弹的路线和爆炸效果
+const effectCanvas = document.createElement('canvas');
+effectCanvas.width = SCREEN_WIDTH;
+effectCanvas.height = SCREEN_HEIGHT;
 const effectCtx = effectCanvas.getContext('2d');
 
-// 玩家类 (三角形)
+// 游戏时钟 (使用JavaScript的requestAnimationFrame和时间戳模拟)
+let lastTime = 0;
+let deltaTime = 0; // 每帧的时间差
+
+// 字体 (JavaScript中直接使用Canvas的font属性)
+ctx.font = '48px Arial'; // 初始字体，后续可以根据需要调整
+
+// 玩家类 (Player Class)
 class Player {
     constructor(x, y, color) {
         this.x = x;
@@ -51,7 +51,7 @@ class Player {
         this.friction = 0.95; // 摩擦力
         this.shieldActive = false;
         this.shieldStartTime = 0;
-        this.shieldDuration = 5; // 防护罩持续时间
+        this.shieldDuration = 5; // 防护罩持续时间改为5秒
         this.shieldRadius = 25; // 防护罩半径
         this.shieldRemainingTime = 0;
         this.shieldCooldown = 0;
@@ -96,15 +96,20 @@ class Player {
             const elapsedTime = (Date.now() - this.shieldStartTime) / 1000;
             const shieldAlpha = Math.min(1, 1 - elapsedTime / this.shieldDuration);
             
-            // 使用 effectCtx 绘制半透明护盾
-            effectCtx.save();
-            effectCtx.globalAlpha = shieldAlpha;
-            effectCtx.strokeStyle = this.color;
-            effectCtx.lineWidth = 2;
-            effectCtx.beginPath();
-            effectCtx.arc(this.x, this.y, this.shieldRadius, 0, Math.PI * 2);
-            effectCtx.stroke();
-            effectCtx.restore();
+            // 使用一个临时的canvas来绘制带透明度的防护罩，然后绘制到主canvas上
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = this.shieldRadius * 2;
+            tempCanvas.height = this.shieldRadius * 2;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            tempCtx.strokeStyle = this.color;
+            tempCtx.lineWidth = 2;
+            tempCtx.globalAlpha = shieldAlpha; // 设置透明度
+            tempCtx.beginPath();
+            tempCtx.arc(this.shieldRadius, this.shieldRadius, this.shieldRadius - 1, 0, Math.PI * 2);
+            tempCtx.stroke();
+            
+            ctx.drawImage(tempCanvas, this.x - this.shieldRadius, this.y - this.shieldRadius);
         }
     }
 
@@ -118,8 +123,9 @@ class Player {
 
         let collision = false;
         for (const wall of walls) {
-            if (newX >= wall.x && newX <= wall.x + WALL_SIZE &&
-                newY >= wall.y && newY <= wall.y + WALL_SIZE) {
+            // 简化碰撞检测，只检测中心点是否进入墙体
+            if (newX > wall.x && newX < wall.x + WALL_SIZE &&
+                newY > wall.y && newY < wall.y + WALL_SIZE) {
                 if (wall.wallType === 1 || wall.wallType === 3) {
                     collision = true;
                     break;
@@ -160,7 +166,7 @@ class Player {
             if (this.shieldRemainingTime <= 0) {
                 this.shieldStartTime = Date.now();
             } else {
-                this.shieldStartTime = Date.now() - (this.shieldDuration * 1000 - this.shieldRemainingTime * 1000);
+                this.shieldStartTime = Date.now() - (this.shieldDuration - this.shieldRemainingTime) * 1000;
             }
         }
     }
@@ -193,7 +199,7 @@ class Player {
     }
 }
 
-// 子弹类
+// 子弹类 (Bullet Class)
 class Bullet {
     constructor(x, y, angle, color, owner) {
         this.x = x;
@@ -204,7 +210,7 @@ class Bullet {
         this.color = color;
         this.trailColor = (color === BLUE) ? LIGHT_BLUE : LIGHT_RED;
         this.creationTime = Date.now();
-        this.trail = [{x: x, y: y}]; // 子弹的行进路线
+        this.trail = [{ x: x, y: y }]; // 子弹的行进路线
         this.active = true;
         this.owner = owner;
     }
@@ -216,8 +222,8 @@ class Bullet {
 
             let collision = false;
             for (const wall of walls) {
-                if (newX >= wall.x && newX <= wall.x + WALL_SIZE &&
-                    newY >= wall.y && newY <= wall.y + WALL_SIZE) {
+                if (newX > wall.x && newX < wall.x + WALL_SIZE &&
+                    newY > wall.y && newY < wall.y + WALL_SIZE) {
                     if (wall.wallType === 1) {
                         collision = true;
                         break;
@@ -228,15 +234,23 @@ class Bullet {
                             break;
                         }
                     } else if (wall.wallType === 3) {
-                        // 计算碰撞点
-                        const collisionPoint = {x: wall.x + WALL_SIZE / 2, y: wall.y + WALL_SIZE / 2};
+                        // 计算碰撞点 (简化处理，取墙的中心)
+                        const collisionPoint = { x: wall.x + WALL_SIZE / 2, y: wall.y + WALL_SIZE / 2 };
                         // 计算入射角
                         const incidentAngle = this.angle;
-                        // 计算墙的法线角度
-                        const wallNormal = Math.atan2(newY - collisionPoint.y, newX - collisionPoint.x);
-                        // 计算反射角
-                        const reflectionAngle = 2 * wallNormal - incidentAngle;
-                        // 更新子弹的角度
+                        // 计算墙的法线角度 (简化处理，根据子弹进入墙的哪个方向来判断)
+                        // 这里需要更精确的碰撞检测和法线计算，但为了初步转换，先简化处理
+                        // 假设反弹墙是方形，法线可以是水平或垂直的
+                        let wallNormal = 0;
+                        if (Math.abs(newX - collisionPoint.x) > Math.abs(newY - collisionPoint.y)) {
+                            // 水平方向碰撞
+                            wallNormal = (newX < collisionPoint.x) ? Math.PI : 0; // 左侧或右侧
+                        } else {
+                            // 垂直方向碰撞
+                            wallNormal = (newY < collisionPoint.y) ? Math.PI / 2 : -Math.PI / 2; // 上方或下方
+                        }
+
+                        const reflectionAngle = 2 * wallNormal - incidentAngle + Math.PI; // 调整反射角
                         this.angle = reflectionAngle;
                         return; // 反弹后直接返回，不更新位置
                     }
@@ -249,7 +263,11 @@ class Bullet {
             } else {
                 this.x = newX;
                 this.y = newY;
-                this.trail.push({x: Math.floor(this.x), y: Math.floor(this.y)});
+                this.trail.push({ x: Math.floor(this.x), y: Math.floor(this.y) });
+                // 限制轨迹长度，避免内存占用过大
+                if (this.trail.length > 50) {
+                    this.trail.shift();
+                }
             }
         }
     }
@@ -285,6 +303,7 @@ class Bullet {
         effectCtx.beginPath();
         effectCtx.arc(this.x, this.y, 30, 0, Math.PI * 2);
         effectCtx.fill();
+
         // 将距离25以内的墙2变为同色
         for (const wall of walls) {
             if (wall.wallType === 2) {
@@ -297,13 +316,13 @@ class Bullet {
     }
 }
 
-// 墙类
+// 墙类 (Wall Class)
 class Wall {
     constructor(x, y, wallType) {
         this.x = x;
         this.y = y;
         this.wallType = wallType;
-        this.color = (wallType === 2) ? WHITE : null;
+        this.color = (wallType === 2) ? WHITE : null; // Type 2 墙默认是白色
     }
 
     draw() {
@@ -329,12 +348,12 @@ class Wall {
     }
 }
 
-// 虚拟摇杆类
+// 虚拟摇杆类 (Joystick Class)
 class Joystick {
     constructor(x, y) {
         this.x = x;
         this.y = y;
-        this.radius = 30; // 减小摇杆的判定范围
+        this.radius = 30; // 摇杆的判定范围
         this.innerRadius = 15;
         this.dx = 0;
         this.dy = 0;
@@ -356,20 +375,20 @@ class Joystick {
     update(pos) {
         let dx = pos.x - this.x;
         let dy = pos.y - this.y;
-        const distance = Math.hypot(dx, dy);
+        let distance = Math.hypot(dx, dy);
         if (distance > this.radius) {
-            dx = dx * this.radius / distance;
-            dy = dy * this.radius / distance;
+            dx = (dx / distance) * this.radius;
+            dy = (dy / distance) * this.radius;
         }
         this.dx = dx / this.radius;
         this.dy = dy / this.radius;
     }
 }
 
-// 触控按钮类
+// 触控按钮类 (Button Class)
 class Button {
     constructor(x, y, width, height, text) {
-        this.rect = {x: x, y: y, width: width, height: height};
+        this.rect = { x: x, y: y, width: width, height: height };
         this.text = text;
     }
 
@@ -379,19 +398,19 @@ class Button {
         ctx.strokeRect(this.rect.x, this.rect.y, this.rect.width, this.rect.height);
 
         ctx.fillStyle = BLACK;
-        ctx.font = '24px Arial'; // 替换Pygame的字体设置
+        ctx.font = '24px Arial'; // 按钮文本使用较小的字体
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(this.text, this.rect.x + this.rect.width / 2, this.rect.y + this.rect.height / 2);
     }
 
     isPressed(pos) {
-        return pos.x >= this.rect.x && pos.x <= this.rect.x + this.rect.width &&
-               pos.y >= this.rect.y && pos.y <= this.rect.y + this.rect.height;
+        return pos.x > this.rect.x && pos.x < this.rect.x + this.rect.width &&
+               pos.y > this.rect.y && pos.y < this.rect.y + this.rect.height;
     }
 }
 
-// 生成随机地图
+// 生成随机地图 (generate_map function)
 function generateMap() {
     const walls = [];
     // 地图边缘固定为墙1
@@ -428,7 +447,7 @@ function generateMap() {
         }
 
         const directions = [[0, 3], [3, 0], [0, -3], [-3, 0]]; // 将步长改为3
-        // 随机打乱方向，确保随机性
+        // 随机打乱方向
         for (let i = directions.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [directions[i], directions[j]] = [directions[j], directions[i]];
@@ -459,8 +478,8 @@ function generateMap() {
     }
 
     // 从随机起点开始生成迷宫
-    const startX = Math.floor(Math.random() * ((gridWidth - 1) / 2)) * 2;
-    const startY = Math.floor(Math.random() * ((gridHeight - 1) / 2)) * 2;
+    const startX = Math.floor(Math.random() * (Math.floor(gridWidth / 2))) * 2;
+    const startY = Math.floor(Math.random() * (Math.floor(gridHeight / 2))) * 2;
     dfs(startX, startY);
 
     // 将迷宫网格转换为墙，并随机分配墙的类型
@@ -468,7 +487,18 @@ function generateMap() {
         for (let x = 0; x < gridWidth; x++) {
             if (grid[y][x] === 1) {
                 // 随机选择墙的类型
-                const wallType = [1, 2, 3][Math.floor(Math.random() * 3)]; // simplified random.choices with weights
+                const choices = [1, 2, 3];
+                const weights = [1, 3, 1];
+                let wallType = 0;
+                let totalWeight = weights.reduce((a, b) => a + b, 0);
+                let rand = Math.random() * totalWeight;
+                for (let i = 0; i < choices.length; i++) {
+                    if (rand < weights[i]) {
+                        wallType = choices[i];
+                        break;
+                    }
+                    rand -= weights[i];
+                }
                 walls.push(new Wall((x + 1) * WALL_SIZE, (y + 1) * WALL_SIZE, wallType));
             }
         }
@@ -485,8 +515,9 @@ function generateMap() {
                     grid[y][x - 1], // 左
                     grid[y][x + 1], // 右
                 ];
-                if (neighbors.filter(n => n === 1).length >= 3) { // 如果当前点有3面是墙，则打通一个方向
+                if (neighbors.filter(val => val === 1).length >= 3) { // 如果当前点有3面是墙，则打通一个方向
                     const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+                    // 随机打乱方向
                     for (let i = directions.length - 1; i > 0; i--) {
                         const j = Math.floor(Math.random() * (i + 1));
                         [directions[i], directions[j]] = [directions[j], directions[i]];
@@ -494,11 +525,12 @@ function generateMap() {
                     for (const [dx, dy] of directions) {
                         const nx = x + dx;
                         const ny = y + dy;
-                        if (grid[ny] && grid[ny][nx] === 1) {
+                        if (grid[ny][nx] === 1) {
                             grid[ny][nx] = 0;
                             // 移除对应的墙
                             for (let i = walls.length - 1; i >= 0; i--) {
-                                if (walls[i].x === (nx + 1) * WALL_SIZE && walls[i].y === (ny + 1) * WALL_SIZE) {
+                                const wall = walls[i];
+                                if (wall.x === (nx + 1) * WALL_SIZE && wall.y === (ny + 1) * WALL_SIZE) {
                                     walls.splice(i, 1);
                                     break;
                                 }
@@ -512,7 +544,7 @@ function generateMap() {
     }
 
     // 随机打通30处不在边缘的墙
-    for (let i = 0; i < 30; i++) {
+    for (let _ = 0; _ < 30; _++) {
         // 获取所有不在边缘的墙
         const nonEdgeWalls = walls.filter(wall =>
             wall.x > WALL_SIZE && wall.x < SCREEN_WIDTH - WALL_SIZE * 2 &&
@@ -527,12 +559,12 @@ function generateMap() {
             const gridY = (wall.y / WALL_SIZE) - 1;
 
             // 检查上下两侧是否有墙
-            const hasWallAbove = (gridY - 1 >= 0) ? grid[gridY - 1][gridX] === 1 : false;
-            const hasWallBelow = (gridY + 1 < gridHeight) ? grid[gridY + 1][gridX] === 1 : false;
+            const hasWallAbove = gridY - 1 >= 0 ? grid[gridY - 1][gridX] === 1 : false;
+            const hasWallBelow = gridY + 1 < gridHeight ? grid[gridY + 1][gridX] === 1 : false;
 
             // 检查左右两侧是否有墙
-            const hasWallLeft = (gridX - 1 >= 0) ? grid[gridY][gridX - 1] === 1 : false;
-            const hasWallRight = (gridX + 1 < gridWidth) ? grid[gridY][gridX + 1] === 1 : false;
+            const hasWallLeft = gridX - 1 >= 0 ? grid[gridY][gridX - 1] === 1 : false;
+            const hasWallRight = gridX + 1 < gridWidth ? grid[gridY][gridX + 1] === 1 : false;
 
             // 如果上下两侧或左右两侧都没有墙，则加入可移除列表
             if (!(hasWallAbove || hasWallBelow) || !(hasWallLeft || hasWallRight)) {
@@ -557,9 +589,15 @@ function generateMap() {
             }
             walls.splice(walls.indexOf(wallToRemove), 1);
 
+            // Recalculate wall adjacency for the removed wall's position
+            const reHasWallAbove = gridY - 1 >= 0 ? grid[gridY - 1][gridX] === 1 : false;
+            const reHasWallBelow = gridY + 1 < gridHeight ? grid[gridY + 1][gridX] === 1 : false;
+            const reHasWallLeft = gridX - 1 >= 0 ? grid[gridY][gridX - 1] === 1 : false;
+            const reHasWallRight = gridX + 1 < gridWidth ? grid[gridY][gridX + 1] === 1 : false;
+
             // 查找并移除紧贴的另一堵符合条件的墙
             // 检查上下方向
-            if (!(hasWallAbove || hasWallBelow)) {
+            if (!(reHasWallAbove || reHasWallBelow)) {
                 // 检查上方
                 if (gridY - 1 >= 0 && grid[gridY - 1][gridX] === 1) {
                     const adjacentWall = walls.find(w => w.x === wallToRemove.x && w.y === wallToRemove.y - WALL_SIZE);
@@ -587,7 +625,7 @@ function generateMap() {
             }
 
             // 检查左右方向
-            else if (!(hasWallLeft || hasWallRight)) {
+            else if (!(reHasWallLeft || reHasWallRight)) {
                 // 检查左侧
                 if (gridX - 1 >= 0 && grid[gridY][gridX - 1] === 1) {
                     const adjacentWall = walls.find(w => w.x === wallToRemove.x - WALL_SIZE && w.y === wallToRemove.y);
@@ -628,22 +666,17 @@ function generateMap() {
     return walls;
 }
 
-// 游戏对象初始化
-let player1;
-let player2;
-let joystick1;
-let joystick2;
-let button1;
-let button1Shield;
-let button2;
-let button2Shield;
-let restartButton;
-let bullets;
-let walls;
-let showTouchControls = true;
-let lastKeyboardEventTime = 0;
+// 游戏状态变量
+let player1, player2, joystick1, joystick2, button1, button2, button1Shield, button2Shield, restartButton;
+let bullets = [];
+let walls = [];
+let gameOver = false;
+let winner = null;
+let showTouchControls = true; // 默认显示按钮
+let lastKeyboardEventTime = 0; // 记录最后一次键盘事件的时间
 const HIDE_DELAY = 5; // 键盘事件后隐藏按钮的延迟时间（秒）
 
+// 游戏初始化
 function initGame() {
     player1 = new Player(SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2, BLUE);
     player2 = new Player(3 * SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2, RED);
@@ -660,16 +693,14 @@ function initGame() {
 
     bullets = [];
     walls = generateMap();
-    game_over = false;
+    gameOver = false;
     winner = null;
-
-    // 清空 effectCanvas
-    effectCtx.clearRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    effectCtx.clearRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT); // 清空效果画布
 }
 
 // 绘制状态信息
 function drawStatus() {
-    const statusFont = '24px Arial';
+    ctx.font = '24px Arial';
 
     // 玩家1状态
     let statusText1;
@@ -681,6 +712,9 @@ function drawStatus() {
     } else {
         statusText1 = "P1 Shield Ready";
     }
+    ctx.fillStyle = BLUE;
+    ctx.textAlign = 'left';
+    ctx.fillText(statusText1, 10, 50);
 
     // 玩家2状态
     let statusText2;
@@ -692,178 +726,66 @@ function drawStatus() {
     } else {
         statusText2 = "P2 Shield Ready";
     }
-
-    ctx.font = statusFont;
-    ctx.fillStyle = BLUE;
-    ctx.textAlign = 'left';
-    ctx.fillText(statusText1, 10, 50);
-
     ctx.fillStyle = RED;
     ctx.textAlign = 'right';
     ctx.fillText(statusText2, SCREEN_WIDTH - 10, 50);
 }
 
-// 更新游戏状态和绘制
-function gameLoop(currentTime) {
-    if (!lastTime) lastTime = currentTime;
-    deltaTime = (currentTime - lastTime) / 1000; // in seconds
-    lastTime = currentTime;
+// 键盘事件处理
+const keysPressed = {};
 
-    // 清除画布
-    ctx.fillStyle = WHITE;
-    ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+document.addEventListener('keydown', (event) => {
+    keysPressed[event.key] = true;
+    lastKeyboardEventTime = Date.now();
 
-    // 绘制子弹的路线和爆炸效果
-    ctx.drawImage(effectCanvas, 0, 0);
-
-    // 绘制墙
-    for (const wall of walls) {
-        wall.draw();
+    if (gameOver && event.key === 'r') { // 假设R键重启
+        initGame();
+        return;
     }
 
-    if (!game_over) {
-        // 键盘控制玩家旋转
-        if (keys['a']) player1.angle -= 0.1;
-        if (keys['d']) player1.angle += 0.1;
-        if (keys['ArrowLeft']) player2.angle -= 0.1;
-        if (keys['ArrowRight']) player2.angle += 0.1;
-
-        // 更新玩家朝向
-        if (joystick1.dx !== 0 || joystick1.dy !== 0) {
-            player1.rotate(Math.atan2(joystick1.dy, joystick1.dx));
+    if (!gameOver) {
+        if (event.key === 'w' && !player1.isShieldActive()) {
+            bullets.push(new Bullet(player1.x, player1.y, player1.angle + Math.PI, BLUE, player1));
+            player1.pushBack(2, player1.angle);
+        } else if (event.key === ' ' && !player2.isShieldActive()) { // Spacebar
+            bullets.push(new Bullet(player2.x, player2.y, player2.angle + Math.PI, RED, player2));
+            player2.pushBack(2, player2.angle);
+        } else if (event.key === 't') {
+            showTouchControls = !showTouchControls;
+        } else if (event.key === 's') { // 玩家1激活防护罩
+            player1.activateShield();
+        } else if (event.key === 'Shift') { // 玩家2激活防护罩 (左Shift或右Shift)
+            player2.activateShield();
         }
-        if (joystick2.dx !== 0 || joystick2.dy !== 0) {
-            player2.rotate(Math.atan2(joystick2.dy, joystick2.dx));
-        }
+    }
+});
 
-        // 移动玩家
-        player1.move(walls);
-        player2.move(walls);
+document.addEventListener('keyup', (event) => {
+    keysPressed[event.key] = false;
 
-        // 移动子弹
-        for (let i = bullets.length - 1; i >= 0; i--) {
-            const bullet = bullets[i];
-            bullet.move(walls);
-            if (!bullet.active || bullet.x < 0 || bullet.x > SCREEN_WIDTH || bullet.y < 0 || bullet.y > SCREEN_HEIGHT) {
-                // 子弹消失时绘制圆形区域 (如果不是因为碰撞而消失)
-                if (bullet.active) {
-                    bullet.explode(walls);
-                }
-                bullets.splice(i, 1);
+    if (event.key === 's') {
+        player1.deactivateShield();
+    } else if (event.key === 'Shift') {
+        player2.deactivateShield();
+    }
+});
+
+// 触摸事件处理
+let activeTouches = {}; // 存储当前活跃的触摸点
+
+canvas.addEventListener('touchstart', (event) => {
+    event.preventDefault(); // 阻止默认的触摸行为，如页面滚动
+    lastKeyboardEventTime = Date.now(); // 触摸事件也视为用户活动
+    for (const touch of event.changedTouches) {
+        const pos = { x: touch.clientX - canvas.getBoundingClientRect().left, y: touch.clientY - canvas.getBoundingClientRect().top };
+        activeTouches[touch.identifier] = { x: pos.x, y: pos.y };
+
+        if (gameOver) {
+            if (restartButton.isPressed(pos)) {
+                initGame();
+                break;
             }
-        }
-
-        // 检测子弹与玩家的碰撞
-        for (let i = bullets.length - 1; i >= 0; i--) {
-            const bullet = bullets[i];
-            if (bullet.isActive()) {
-                // 检测防护罩
-                if (player1.isShieldActive() && Math.hypot(bullet.x - player1.x, bullet.y - player1.y) < player1.shieldRadius) {
-                    bullet.explode(walls);
-                    bullets.splice(i, 1);
-                    player1.deactivateShield();
-                    player1.shieldCooldown = 1;
-                    continue;
-                }
-                if (player2.isShieldActive() && Math.hypot(bullet.x - player2.x, bullet.y - player2.y) < player2.shieldRadius) {
-                    bullet.explode(walls);
-                    bullets.splice(i, 1);
-                    player2.deactivateShield();
-                    player2.shieldCooldown = 1;
-                    continue;
-                }
-                // 忽略与发射者的碰撞
-                if (bullet.owner === player1) {
-                    if (Math.hypot(bullet.x - player2.x, bullet.y - player2.y) < player2.size + bullet.radius) {
-                        player2.health -= 10;
-                        bullet.explode(walls);
-                        bullets.splice(i, 1);
-                        if (player2.health <= 0) {
-                            game_over = true;
-                            winner = "Player 1";
-                        }
-                    }
-                } else if (bullet.owner === player2) {
-                    if (Math.hypot(bullet.x - player1.x, bullet.y - player1.y) < player1.size + bullet.radius) {
-                        player1.health -= 10;
-                        bullet.explode(walls);
-                        bullets.splice(i, 1);
-                        if (player1.health <= 0) {
-                            game_over = true;
-                            winner = "Player 2";
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // 绘制玩家
-    player1.draw();
-    player2.draw();
-
-    // 绘制子弹
-    for (const bullet of bullets) {
-        bullet.draw();
-    }
-
-    // 绘制摇杆和按钮
-    if (showTouchControls) {
-        joystick1.draw();
-        joystick2.draw();
-        button1.draw();
-        button2.draw();
-        button1Shield.draw();
-        button2Shield.draw();
-    }
-
-    // 绘制血量
-    ctx.font = '24px Arial';
-    ctx.fillStyle = BLACK;
-    ctx.textAlign = 'left';
-    ctx.fillText(`P1 Health: ${player1.health}`, 10, 10);
-    ctx.textAlign = 'right';
-    ctx.fillText(`P2 Health: ${player2.health}`, SCREEN_WIDTH - 10, 10);
-
-    // 游戏结束逻辑
-    if (game_over) {
-        ctx.font = '48px Arial';
-        ctx.fillStyle = BLACK;
-        ctx.textAlign = 'center';
-        ctx.fillText(`${winner} Wins!`, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 20);
-        restartButton.draw();
-    }
-
-    // 绘制状态信息
-    drawStatus();
-
-    // 更新玩家状态 (冷却时间等)
-    player1.update(deltaTime);
-    player2.update(deltaTime);
-
-    // 更新触摸控制的显示状态
-    const currentTimeInSeconds = Date.now() / 1000;
-    if (currentTimeInSeconds - lastKeyboardEventTime < HIDE_DELAY) {
-        showTouchControls = false;
-    } else {
-        showTouchControls = true;
-    }
-
-    // 请求下一帧动画
-    requestAnimationFrame(gameLoop);
-}
-
-canvas.addEventListener('touchstart', (e) => {
-    e.preventDefault(); // 阻止默认的触摸行为，例如滚动
-    if (game_over) {
-        const touch = e.touches[0];
-        const pos = {x: touch.clientX, y: touch.clientY};
-        if (restartButton.isPressed(pos)) {
-            initGame();
-        }
-    } else {
-        for (const touch of e.touches) {
-            const pos = {x: touch.clientX, y: touch.clientY};
+        } else {
             if (button1.isPressed(pos)) {
                 bullets.push(new Bullet(player1.x, player1.y, player1.angle + Math.PI, BLUE, player1));
                 player1.pushBack(2, player1.angle);
@@ -881,13 +803,15 @@ canvas.addEventListener('touchstart', (e) => {
             }
         }
     }
-});
+}, { passive: false });
 
-canvas.addEventListener('touchmove', (e) => {
-    e.preventDefault();
-    if (!game_over) {
-        for (const touch of e.touches) {
-            const pos = {x: touch.clientX, y: touch.clientY};
+canvas.addEventListener('touchmove', (event) => {
+    event.preventDefault();
+    lastKeyboardEventTime = Date.now();
+    if (!gameOver) {
+        for (const touch of event.changedTouches) {
+            const pos = { x: touch.clientX - canvas.getBoundingClientRect().left, y: touch.clientY - canvas.getBoundingClientRect().top };
+            activeTouches[touch.identifier] = { x: pos.x, y: pos.y };
             if (pos.x < SCREEN_WIDTH / 2) {
                 joystick1.update(pos);
             } else {
@@ -895,16 +819,15 @@ canvas.addEventListener('touchmove', (e) => {
             }
         }
     }
-});
+}, { passive: false });
 
-canvas.addEventListener('touchend', (e) => {
-    e.preventDefault();
-    // 检查哪个摇杆或按钮被释放
-    let leftJoystickReleased = true;
-    let rightJoystickReleased = true;
+canvas.addEventListener('touchend', (event) => {
+    event.preventDefault();
+    lastKeyboardEventTime = Date.now();
+    for (const touch of event.changedTouches) {
+        const pos = { x: touch.clientX - canvas.getBoundingClientRect().left, y: touch.clientY - canvas.getBoundingClientRect().top };
+        delete activeTouches[touch.identifier];
 
-    for (const touch of e.changedTouches) {
-        const pos = {x: touch.clientX, y: touch.clientY};
         if (button1Shield.isPressed(pos)) {
             player1.deactivateShield();
         } else if (button2Shield.isPressed(pos)) {
@@ -912,38 +835,155 @@ canvas.addEventListener('touchend', (e) => {
         }
 
         if (pos.x < SCREEN_WIDTH / 2) {
-            leftJoystickReleased = false;
+            joystick1.dx = 0;
+            joystick1.dy = 0;
         } else {
-            rightJoystickReleased = false;
+            joystick2.dx = 0;
+            joystick2.dy = 0;
+        }
+    }
+}, { passive: false });
+
+// 游戏主循环
+function gameLoop(currentTime) {
+    requestAnimationFrame(gameLoop);
+
+    deltaTime = (currentTime - lastTime) / 1000; // 转换为秒
+    lastTime = currentTime;
+
+    // 清空屏幕
+    ctx.fillStyle = WHITE;
+    ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+    // 绘制子弹的路线和爆炸效果
+    ctx.drawImage(effectCanvas, 0, 0);
+
+    // 绘制墙
+    for (const wall of walls) {
+        wall.draw();
+    }
+
+    // 处理键盘控制玩家旋转
+    if (keysPressed['a']) player1.angle -= 0.1;
+    if (keysPressed['d']) player1.angle += 0.1;
+    if (keysPressed['ArrowLeft']) player2.angle -= 0.1;
+    if (keysPressed['ArrowRight']) player2.angle += 0.1;
+
+    if (!gameOver) {
+        // 更新玩家朝向
+        if (joystick1.dx !== 0 || joystick1.dy !== 0) {
+            player1.rotate(Math.atan2(joystick1.dy, joystick1.dx));
+        }
+        if (joystick2.dx !== 0 || joystick2.dy !== 0) {
+            player2.rotate(Math.atan2(joystick2.dy, joystick2.dx));
+        }
+
+        // 移动玩家
+        player1.move(walls);
+        player2.move(walls);
+        player1.update(deltaTime);
+        player2.update(deltaTime);
+
+        // 移动子弹
+        for (let i = bullets.length - 1; i >= 0; i--) {
+            const bullet = bullets[i];
+            bullet.move(walls);
+            // 移除屏幕外的子弹
+            if (bullet.x < 0 || bullet.x > SCREEN_WIDTH || bullet.y < 0 || bullet.y > SCREEN_HEIGHT || !bullet.active) {
+                // bullet.explode(walls); // 已经在move中处理了爆炸效果
+                bullets.splice(i, 1);
+            }
+        }
+
+        // 检测子弹与玩家的碰撞
+        for (let i = bullets.length - 1; i >= 0; i--) {
+            const bullet = bullets[i];
+            if (!bullet.isActive()) continue; // 子弹射出后前0.2秒不判定击中
+
+            // 检测防护罩
+            if (player1.isShieldActive() && Math.hypot(bullet.x - player1.x, bullet.y - player1.y) < player1.shieldRadius) {
+                bullet.explode(walls);
+                bullets.splice(i, 1);
+                player1.deactivateShield();
+                player1.shieldCooldown = 1;
+                continue;
+            }
+            if (player2.isShieldActive() && Math.hypot(bullet.x - player2.x, bullet.y - player2.y) < player2.shieldRadius) {
+                bullet.explode(walls);
+                bullets.splice(i, 1);
+                player2.deactivateShield();
+                player2.shieldCooldown = 1;
+                continue;
+            }
+
+            // 忽略与发射者的碰撞
+            if (bullet.owner === player1) {
+                if (Math.hypot(bullet.x - player2.x, bullet.y - player2.y) < player2.size + bullet.radius) {
+                    player2.health -= 10;
+                    bullet.explode(walls);
+                    bullets.splice(i, 1);
+                    if (player2.health <= 0) {
+                        gameOver = true;
+                        winner = "Player 1";
+                    }
+                }
+            } else if (bullet.owner === player2) {
+                if (Math.hypot(bullet.x - player1.x, bullet.y - player1.y) < player1.size + bullet.radius) {
+                    player1.health -= 10;
+                    bullet.explode(walls);
+                    bullets.splice(i, 1);
+                    if (player1.health <= 0) {
+                        gameOver = true;
+                        winner = "Player 2";
+                    }
+                }
+            }
         }
     }
 
-    // 如果没有活动的触摸点在左侧摇杆区域，则重置左侧摇杆
-    let activeLeftTouch = false;
-    for (const touch of e.touches) {
-        if (touch.clientX < SCREEN_WIDTH / 2) {
-            activeLeftTouch = true;
-            break;
-        }
-    }
-    if (!activeLeftTouch) {
-        joystick1.dx = 0;
-        joystick1.dy = 0;
+    // 绘制玩家
+    player1.draw();
+    player2.draw();
+
+    // 绘制子弹 (子弹轨迹在effectCanvas上)
+    for (const bullet of bullets) {
+        bullet.draw();
     }
 
-    // 如果没有活动的触摸点在右侧摇杆区域，则重置右侧摇杆
-    let activeRightTouch = false;
-    for (const touch of e.touches) {
-        if (touch.clientX >= SCREEN_WIDTH / 2) {
-            activeRightTouch = true;
-            break;
-        }
+    // 绘制摇杆和按钮
+    const currentTimeInSeconds = Date.now() / 1000;
+    const keyboardInactiveTime = (currentTimeInSeconds - lastKeyboardEventTime / 1000);
+    
+    if (showTouchControls || keyboardInactiveTime > HIDE_DELAY) {
+        joystick1.draw();
+        joystick2.draw();
+        button1.draw();
+        button2.draw();
+        button1Shield.draw();
+        button2Shield.draw();
     }
-    if (!activeRightTouch) {
-        joystick2.dx = 0;
-        joystick2.dy = 0;
+
+    // 绘制血量
+    ctx.fillStyle = BLACK;
+    ctx.font = '32px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText(`P1 Health: ${player1.health}`, 10, 30);
+    ctx.textAlign = 'right';
+    ctx.fillText(`P2 Health: ${player2.health}`, SCREEN_WIDTH - 10, 30);
+
+    // 游戏结束逻辑
+    if (gameOver) {
+        ctx.fillStyle = BLACK;
+        ctx.font = '48px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${winner} Wins!`, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 20);
+        restartButton.draw();
     }
-});
+
+    // 在绘制所有其他元素后调用
+    drawStatus();
+}
 
 // 启动游戏
 initGame();
+requestAnimationFrame(gameLoop);
