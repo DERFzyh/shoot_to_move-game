@@ -1155,7 +1155,55 @@ function gameLoop(currentTime) {
     }
 }
 
-// 启动：默认开启联机连接；如果服务器连不上，仍然可以本地单机
-setupOnline();
-initGame(true); // 本地随机地图（单机模式），如果联机成功，会在收到服务器 init 时覆盖
-requestAnimationFrame(gameLoop);
+// ======= 菜单与启动逻辑 =======
+const menuOverlay = document.getElementById('menuOverlay');
+const btnLocal = document.getElementById('btnLocal');
+const btnOnline = document.getElementById('btnOnline');
+const netStatus = document.getElementById('netStatus');
+
+function hideMenu() {
+    if (menuOverlay) {
+        menuOverlay.style.display = 'none';
+    }
+}
+
+function showMenuMessage(msg, color = '#d32f2f') {
+    if (netStatus) {
+        netStatus.textContent = msg;
+        netStatus.style.color = color;
+    }
+}
+
+if (btnLocal) {
+    btnLocal.addEventListener('click', () => {
+        onlineMode = false;
+        myRole = null;
+        myPlayer = null;
+        otherPlayer = null;
+        hideMenu();
+        initGame(true); // 本地随机地图
+        if (!lastTime) {
+            requestAnimationFrame(gameLoop);
+        }
+    });
+}
+
+if (btnOnline) {
+    btnOnline.addEventListener('click', () => {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            // 已经连上，直接开始（等服务器 init）
+            hideMenu();
+            showMenuMessage('');
+        } else {
+            showMenuMessage('正在连接服务器...', '#1565C0');
+            setupOnline();
+            // 真正的 initGame 会在收到服务器 init 后执行
+            hideMenu();
+        }
+        if (!lastTime) {
+            requestAnimationFrame(gameLoop);
+        }
+    });
+}
+
+// 默认先不启动游戏循环，等玩家在菜单选择模式后再启动

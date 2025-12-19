@@ -17,10 +17,82 @@
         canvas {
             border: 1px solid black;
             background-color: white;
+            display: block;
+        }
+        #menuOverlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.65);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        .menu-panel {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 24px 32px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.25);
+            text-align: center;
+            min-width: 260px;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        .menu-panel h1 {
+            margin-top: 0;
+            margin-bottom: 16px;
+            font-size: 28px;
+        }
+        .menu-panel button {
+            display: block;
+            width: 100%;
+            margin: 8px 0;
+            padding: 10px 0;
+            border-radius: 8px;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.15s ease;
+        }
+        #btnLocal {
+            background: linear-gradient(135deg, #4CAF50, #2E7D32);
+            color: white;
+            box-shadow: 0 4px 12px rgba(76,175,80,0.4);
+        }
+        #btnOnline {
+            background: linear-gradient(135deg, #2196F3, #1565C0);
+            color: white;
+            box-shadow: 0 4px 12px rgba(33,150,243,0.4);
+        }
+        .menu-panel button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+        }
+        .menu-panel button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        .tip {
+            font-size: 12px;
+            color: #555;
+            margin-top: 12px;
+        }
+        .status {
+            font-size: 12px;
+            margin-top: 6px;
+            color: #d32f2f;
         }
     </style>
 </head>
 <body>
+    <div id="menuOverlay">
+        <div class="menu-panel">
+            <h1>Shoot to Move</h1>
+            <button id="btnLocal">本地双人对战</button>
+            <button id="btnOnline">联机对战</button>
+            <p class="tip">联机对战需要先在本机启动 <code>node server.js</code></p>
+            <p id="netStatus" class="status"></p>
+        </div>
+    </div>
     <canvas id="gameCanvas" width="800" height="600"></canvas>
     <script src="script.js"></script>
 </body>

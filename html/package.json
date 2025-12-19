@@ -1,0 +1,21 @@
+{
+  "name": "shoot_to_move-game",
+  "version": "1.0.0",
+  "description": "Shoot to Move Game with WebSocket online mode",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "game",
+    "websocket",
+    "shoot-to-move"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "ws": "^8.17.0"
+  }
+}
+
+
