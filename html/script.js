@@ -676,8 +676,171 @@ let showTouchControls = true; // 默认显示按钮
 let lastKeyboardEventTime = 0; // 记录最后一次键盘事件的时间
 const HIDE_DELAY = 5; // 键盘事件后隐藏按钮的延迟时间（秒）
 
+// ===== 联机相关变量 =====
+let socket = null;
+let onlineMode = false; // 是否为联机模式
+let myRole = null; // 'player1' or 'player2'
+let myPlayer = null;
+let otherPlayer = null;
+
+// 为了避免重复创建远程子弹，记录远程子弹的id
+let remoteBulletIdCounter = 0;
+const seenRemoteBulletIds = new Set();
+
+// 简单生成本地唯一子弹ID（只在当前客户端内部唯一即可）
+let localBulletSeq = 0;
+
+function createLocalBullet(player, color) {
+    const bullet = new Bullet(player.x, player.y, player.angle + Math.PI, color, player);
+    bullet.localId = `${myRole || 'local'}-${Date.now()}-${localBulletSeq++}`;
+    bullets.push(bullet);
+
+    // 联机模式下把开火事件发给对方
+    if (onlineMode && socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+            type: 'event',
+            event: 'shoot',
+            bullet: {
+                id: bullet.localId,
+                x: bullet.x,
+                y: bullet.y,
+                angle: bullet.angle,
+                color: bullet.color === BLUE ? 'BLUE' : 'RED',
+                owner: player === player1 ? 'player1' : 'player2'
+            }
+        }));
+    }
+}
+
+function spawnRemoteBullet(data) {
+    if (!data || !data.id || seenRemoteBulletIds.has(data.id)) return;
+    seenRemoteBulletIds.add(data.id);
+
+    const color = data.color === 'BLUE' ? BLUE : RED;
+    const owner = data.owner === 'player1' ? player1 : player2;
+    const b = new Bullet(data.x, data.y, data.angle, color, owner);
+    b.localId = data.id;
+    bullets.push(b);
+}
+
+// 联机：同步自己玩家的基础状态（位置、角度、血量）
+function sendMyState() {
+    if (!onlineMode || !socket || socket.readyState !== WebSocket.OPEN || !myPlayer) return;
+    socket.send(JSON.stringify({
+        type: 'state',
+        x: myPlayer.x,
+        y: myPlayer.y,
+        angle: myPlayer.angle,
+        health: myPlayer.health
+    }));
+}
+
+function applyRemoteState(role, data) {
+    if (!onlineMode || !otherPlayer) return;
+    // 只处理对方的状态
+    if (role === (myRole === 'player1' ? 'player1' : 'player2')) {
+        // 是自己发的就忽略
+        return;
+    }
+    if (typeof data.x === 'number') otherPlayer.x = data.x;
+    if (typeof data.y === 'number') otherPlayer.y = data.y;
+    if (typeof data.angle === 'number') otherPlayer.angle = data.angle;
+    if (typeof data.health === 'number') otherPlayer.health = data.health;
+}
+
+// 连接 WebSocket 服务器
+function setupOnline() {
+    try {
+        socket = new WebSocket('ws://localhost:3000');
+    } catch (e) {
+        console.error('无法连接 WebSocket 服务器：', e);
+        return;
+    }
+
+    socket.addEventListener('open', () => {
+        console.log('已连接到联机服务器');
+    });
+
+    socket.addEventListener('message', (event) => {
+        let data;
+        try {
+            data = JSON.parse(event.data);
+        } catch {
+            return;
+        }
+
+        if (data.type === 'full') {
+            alert('房间已满，当前只支持两名玩家。');
+            return;
+        }
+
+        if (data.type === 'init') {
+            // 分配身份并根据服务器地图初始化游戏
+            myRole = data.role;
+            onlineMode = true;
+
+            // 反序列化墙
+            walls = (data.walls || []).map(w => {
+                const wall = new Wall(w.x, w.y, w.wallType);
+                if (w.color) {
+                    wall.color = w.color;
+                } else if (wall.wallType === 2) {
+                    wall.color = WHITE;
+                }
+                return wall;
+            });
+
+            // 基于现有 initGame 逻辑，改为使用服务器的 walls
+            initGame(false); // 不在 initGame 里生成随机地图
+
+            if (myRole === 'player1') {
+                myPlayer = player1;
+                otherPlayer = player2;
+            } else {
+                myPlayer = player2;
+                otherPlayer = player1;
+            }
+
+            console.log('联机身份：', myRole);
+        } else if (data.type === 'restart') {
+            // 服务器重新生成了地图
+            walls = (data.walls || []).map(w => {
+                const wall = new Wall(w.x, w.y, w.wallType);
+                if (w.color) {
+                    wall.color = w.color;
+                } else if (wall.wallType === 2) {
+                    wall.color = WHITE;
+                }
+                return wall;
+            });
+            initGame(false);
+            if (myRole === 'player1') {
+                myPlayer = player1;
+                otherPlayer = player2;
+            } else {
+                myPlayer = player2;
+                otherPlayer = player1;
+            }
+        } else if (data.type === 'state') {
+            applyRemoteState(data.from, data);
+        } else if (data.type === 'event') {
+            if (data.event === 'shoot' && data.from !== myRole) {
+                spawnRemoteBullet(data.bullet);
+            }
+        } else if (data.type === 'player_leave') {
+            gameOver = true;
+            winner = '对方已退出';
+        }
+    });
+
+    socket.addEventListener('close', () => {
+        console.log('与联机服务器断开连接');
+    });
+}
+
 // 游戏初始化
-function initGame() {
+// 参数 useRandomMap: true 表示本地随机地图（单机模式），false 表示使用外部已经填好的 walls（联机模式）
+function initGame(useRandomMap = true) {
     player1 = new Player(SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2, BLUE);
     player2 = new Player(3 * SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2, RED);
 
@@ -692,7 +855,9 @@ function initGame() {
     restartButton = new Button(SCREEN_WIDTH / 2 - 50, SCREEN_HEIGHT / 2 + 50, 100, 50, "Restart");
 
     bullets = [];
-    walls = generateMap();
+    if (useRandomMap) {
+        walls = generateMap();
+    }
     gameOver = false;
     winner = null;
     effectCtx.clearRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT); // 清空效果画布
@@ -745,10 +910,10 @@ document.addEventListener('keydown', (event) => {
 
     if (!gameOver) {
         if (event.key === 'w' && !player1.isShieldActive()) {
-            bullets.push(new Bullet(player1.x, player1.y, player1.angle + Math.PI, BLUE, player1));
+            createLocalBullet(player1, BLUE);
             player1.pushBack(2, player1.angle);
         } else if (event.key === ' ' && !player2.isShieldActive()) { // Spacebar
-            bullets.push(new Bullet(player2.x, player2.y, player2.angle + Math.PI, RED, player2));
+            createLocalBullet(player2, RED);
             player2.pushBack(2, player2.angle);
         } else if (event.key === 't') {
             showTouchControls = !showTouchControls;
@@ -787,10 +952,10 @@ canvas.addEventListener('touchstart', (event) => {
             }
         } else {
             if (button1.isPressed(pos)) {
-                bullets.push(new Bullet(player1.x, player1.y, player1.angle + Math.PI, BLUE, player1));
+                createLocalBullet(player1, BLUE);
                 player1.pushBack(2, player1.angle);
             } else if (button2.isPressed(pos)) {
-                bullets.push(new Bullet(player2.x, player2.y, player2.angle + Math.PI, RED, player2));
+                createLocalBullet(player2, RED);
                 player2.pushBack(2, player2.angle);
             } else if (button1Shield.isPressed(pos)) {
                 player1.activateShield();
@@ -919,6 +1084,7 @@ function gameLoop(currentTime) {
             // 忽略与发射者的碰撞
             if (bullet.owner === player1) {
                 if (Math.hypot(bullet.x - player2.x, bullet.y - player2.y) < player2.size + bullet.radius) {
+                    // 联机模式下只让拥有该子弹的那一方结算伤害，并通过 state 同步血量
                     player2.health -= 10;
                     bullet.explode(walls);
                     bullets.splice(i, 1);
@@ -982,8 +1148,14 @@ function gameLoop(currentTime) {
 
     // 在绘制所有其他元素后调用
     drawStatus();
+
+    // 联机模式下定期同步自己的状态
+    if (onlineMode) {
+        sendMyState();
+    }
 }
 
-// 启动游戏
-initGame();
+// 启动：默认开启联机连接；如果服务器连不上，仍然可以本地单机
+setupOnline();
+initGame(true); // 本地随机地图（单机模式），如果联机成功，会在收到服务器 init 时覆盖
 requestAnimationFrame(gameLoop);
