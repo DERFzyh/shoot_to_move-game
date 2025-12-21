@@ -39,13 +39,18 @@ ctx.font = '48px Arial'; // 初始字体，后续可以根据需要调整
 
 // 玩家类 (Player Class)
 class Player {
-    constructor(x, y, color) {
+    constructor(x, y, color, team, playerId, playerName) {
         this.x = x;
         this.y = y;
         this.color = color;
+        this.team = team; // 阵营ID
+        this.teamColor = TEAM_COLORS[team % TEAM_COLORS.length]; // 阵营颜色
+        this.playerId = playerId; // 玩家ID
+        this.playerName = playerName; // 玩家名称
         this.size = 15; // 三角形的大小
         this.angle = 0; // 初始角度
         this.health = 100;
+        this.maxHealth = 100;
         this.speedX = 0; // 水平速度
         this.speedY = 0; // 垂直速度
         this.friction = 0.95; // 摩擦力
@@ -56,6 +61,12 @@ class Player {
         this.shieldRemainingTime = 0;
         this.shieldCooldown = 0;
         this.shieldButtonPressed = false;
+
+        // 统计数据
+        this.kills = 0; // 击杀数
+        this.damageDealt = 0; // 造成的伤害
+        this.damageTaken = 0; // 承受的伤害
+        this.isAlive = true; // 是否存活
     }
 
     draw() {
@@ -201,14 +212,14 @@ class Player {
 
 // 子弹类 (Bullet Class)
 class Bullet {
-    constructor(x, y, angle, color, owner) {
+    constructor(x, y, angle, teamColor, owner) {
         this.x = x;
         this.y = y;
         this.angle = angle;
         this.speed = 10;
         this.radius = 5;
-        this.color = color;
-        this.trailColor = (color === BLUE) ? LIGHT_BLUE : LIGHT_RED;
+        this.color = teamColor; // 使用阵营颜色
+        this.trailColor = teamColor; // 轨迹也使用阵营颜色
         this.creationTime = Date.now();
         this.trail = [{ x: x, y: y }]; // 子弹的行进路线
         this.active = true;
@@ -666,7 +677,7 @@ function generateMap() {
     return walls;
 }
 
-// 预定义颜色
+// 预定义颜色和阵营
 const PLAYER_COLORS = [
     'rgb(0, 0, 255)',     // 蓝色
     'rgb(255, 0, 0)',     // 红色
@@ -680,6 +691,15 @@ const PLAYER_COLORS = [
     'rgb(165, 42, 42)',   // 棕色
     'rgb(0, 128, 128)',   // 青绿
     'rgb(128, 128, 0)'    // 橄榄绿
+];
+
+const TEAM_COLORS = [
+    'rgb(0, 100, 255)',   // 蓝色阵营
+    'rgb(255, 100, 0)',   // 红色阵营
+    'rgb(100, 255, 0)',   // 绿色阵营
+    'rgb(255, 255, 100)', // 黄色阵营
+    'rgb(255, 100, 255)', // 粉色阵营
+    'rgb(100, 255, 255)'  // 青色阵营
 ];
 
 // 默认键位配置
@@ -772,11 +792,20 @@ function initializePlayers() {
     gameSettings.players = [];
     for (let i = 0; i < 12; i++) {
         const playerIndex = i % DEFAULT_CONTROLS.length;
+        // 平均分配阵营，最多6个阵营
+        const team = Math.floor(i / 2) % 6; // 每2个玩家一个阵营，循环分配
+
         gameSettings.players.push({
             id: i + 1,
             color: PLAYER_COLORS[i % PLAYER_COLORS.length],
+            team: team,
             name: `玩家${i + 1}`,
-            controls: { ...DEFAULT_CONTROLS[playerIndex] }
+            controls: { ...DEFAULT_CONTROLS[playerIndex] },
+            // 统计数据将在Player对象中初始化
+            kills: 0,
+            damageDealt: 0,
+            damageTaken: 0,
+            isAlive: true
         });
     }
 }
@@ -792,6 +821,7 @@ let walls = [];
 let gameOver = false;
 let winner = null;
 let gamePaused = false; // 游戏是否暂停（设置面板打开时）
+let gameStats = null; // 游戏统计数据
 let showTouchControls = false; // 默认不显示触控按钮，根据设备类型决定
 let lastKeyboardEventTime = 0; // 记录最后一次键盘事件的时间
 let lastMouseEventTime = 0; // 记录最后一次鼠标事件的时间
@@ -805,19 +835,63 @@ function isTouchDevice() {
     return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 }
 
-// 统一的事件状态检查
+// 统一的事件状态检查（只针对游戏相关事件）
 function shouldBlockGameEvents() {
-    return (keyCapturePlayer !== null && keyCaptureType !== null) || gamePaused;
+    return keyCapturePlayer !== null && keyCaptureType !== null;
+}
+
+// 检查是否应该暂停游戏事件（包括UI事件）
+function shouldPauseAllEvents() {
+    return gamePaused;
 }
 
 // 统一的事件阻断处理
 function blockEventIfNeeded(event) {
+    // 检查事件是否发生在设置面板内
+    const settingsPanel = document.getElementById('settingsPanel');
+    const isInSettingsPanel = settingsPanel && settingsPanel.contains(event.target);
+
+    // 如果事件发生在设置面板内，且只是游戏暂停（不是录制按键），则不阻断
+    if (isInSettingsPanel && shouldPauseAllEvents() && !shouldBlockGameEvents()) {
+        return false; // 允许UI事件正常处理
+    }
+
+    // 录制按键时，所有事件都应该被阻断，包括UI事件
     if (shouldBlockGameEvents()) {
         event.preventDefault();
         event.stopPropagation();
         return true; // 返回true表示事件被阻断
     }
+
+    // 游戏暂停时，阻断所有非UI事件
+    if (shouldPauseAllEvents()) {
+        event.preventDefault();
+        event.stopPropagation();
+        return true; // 返回true表示事件被阻断
+    }
+
     return false; // 返回false表示事件正常处理
+}
+
+// 专门用于处理玩家人数变化的事件
+function onPlayerCountChange() {
+    const playerCountSelect = document.getElementById('playerCount');
+    if (!playerCountSelect) {
+        console.error('playerCount select element not found');
+        return;
+    }
+
+    const playerCount = parseInt(playerCountSelect.value);
+    if (isNaN(playerCount) || playerCount < 0 || playerCount > 12) {
+        console.error('Invalid player count:', playerCount);
+        return;
+    }
+
+    // 保存设置
+    gameSettings.playerCount = playerCount;
+
+    // 立即更新UI，无论面板是否打开
+    updatePlayerSettings();
 }
 
 // 设置界面函数
@@ -836,27 +910,70 @@ function toggleSettings() {
 }
 
 function updatePlayerSettings() {
-    const playerCount = parseInt(document.getElementById('playerCount').value);
+    const playerCountSelect = document.getElementById('playerCount');
+    if (!playerCountSelect) {
+        console.error('playerCount select element not found');
+        return;
+    }
+
+    const playerCount = parseInt(playerCountSelect.value);
+    if (isNaN(playerCount) || playerCount < 0 || playerCount > 12) {
+        console.error('Invalid player count:', playerCount);
+        return;
+    }
+
     gameSettings.playerCount = playerCount;
 
     const playerSettingsDiv = document.getElementById('playerSettings');
+    if (!playerSettingsDiv) {
+        console.error('playerSettings div not found');
+        return;
+    }
+
     playerSettingsDiv.innerHTML = '';
+
+    // 确保players数组已初始化
+    if (!gameSettings.players || gameSettings.players.length === 0) {
+        console.log('Re-initializing players array');
+        initializePlayers();
+    }
+
+    // 确保有足够的玩家数据
+    if (gameSettings.players.length < playerCount) {
+        console.log('Extending players array to accommodate', playerCount, 'players');
+        while (gameSettings.players.length < playerCount) {
+            const playerIndex = gameSettings.players.length;
+            const defaultControlsIndex = playerIndex % DEFAULT_CONTROLS.length;
+            gameSettings.players.push({
+                id: playerIndex + 1,
+                color: PLAYER_COLORS[playerIndex % PLAYER_COLORS.length],
+                name: `玩家${playerIndex + 1}`,
+                controls: { ...DEFAULT_CONTROLS[defaultControlsIndex] }
+            });
+        }
+    }
 
     for (let i = 0; i < playerCount; i++) {
         const player = gameSettings.players[i];
+        if (!player) {
+            console.error(`Player ${i} not found in players array`);
+            continue;
+        }
+
+        const teamName = ['红', '蓝', '绿', '黄', '粉', '青'][player.team] || `阵营${player.team + 1}`;
         const playerDiv = document.createElement('div');
         playerDiv.className = 'player-settings';
         playerDiv.innerHTML = `
-            <h3 style="color: ${player.color || PLAYER_COLORS[i % PLAYER_COLORS.length]}">${player ? player.name : `玩家${i + 1}`}</h3>
+            <h3 style="color: ${player.color || PLAYER_COLORS[i % PLAYER_COLORS.length]}">${player.name || `玩家${i + 1}`} (${teamName}阵营)</h3>
 
             <div class="settings-group">
                 <div class="radio-group">
                     <label>
-                        <input type="radio" name="aimMode${i}" value="keys" ${(player && player.controls.aimMode === 'keys') ? 'checked' : (i < 2 ? '' : 'checked')}>
+                        <input type="radio" name="aimMode${i}" value="keys" ${(player.controls && player.controls.aimMode === 'keys') ? 'checked' : (i < 2 ? 'checked' : '')}>
                         按键控制 (左转/右转)
                     </label>
                     <label>
-                        <input type="radio" name="aimMode${i}" value="mouse" ${(player && player.controls.aimMode === 'mouse') ? 'checked' : ''}>
+                        <input type="radio" name="aimMode${i}" value="mouse" ${(player.controls && player.controls.aimMode === 'mouse') ? 'checked' : ''}>
                         始终对准鼠标
                     </label>
                 </div>
@@ -864,22 +981,22 @@ function updatePlayerSettings() {
 
             <div class="control-group">
                 <label for="leftKey${i}">左转键:</label>
-                <input type="text" id="leftKey${i}" value="${player ? getDisplayValue(player.controls.leftKey) : 'A'}" readonly onclick="startKeyCapture(${i}, 'leftKey')">
+                <input type="text" id="leftKey${i}" value="${(player.controls && player.controls.leftKey) ? getDisplayValue(player.controls.leftKey) : 'A'}" readonly onclick="startKeyCapture(${i}, 'leftKey')">
             </div>
 
             <div class="control-group">
                 <label for="rightKey${i}">右转键:</label>
-                <input type="text" id="rightKey${i}" value="${player ? getDisplayValue(player.controls.rightKey) : 'D'}" readonly onclick="startKeyCapture(${i}, 'rightKey')">
+                <input type="text" id="rightKey${i}" value="${(player.controls && player.controls.rightKey) ? getDisplayValue(player.controls.rightKey) : 'D'}" readonly onclick="startKeyCapture(${i}, 'rightKey')">
             </div>
 
             <div class="control-group">
                 <label for="shootKey${i}">射击键:</label>
-                <input type="text" id="shootKey${i}" value="${player ? getDisplayValue(player.controls.shootKey) : 'W'}" readonly onclick="startKeyCapture(${i}, 'shootKey')">
+                <input type="text" id="shootKey${i}" value="${(player.controls && player.controls.shootKey) ? getDisplayValue(player.controls.shootKey) : 'W'}" readonly onclick="startKeyCapture(${i}, 'shootKey')">
             </div>
 
             <div class="control-group">
                 <label for="shieldKey${i}">护盾键:</label>
-                <input type="text" id="shieldKey${i}" value="${player ? getDisplayValue(player.controls.shieldKey) : 'S'}" readonly onclick="startKeyCapture(${i}, 'shieldKey')">
+                <input type="text" id="shieldKey${i}" value="${(player.controls && player.controls.shieldKey) ? getDisplayValue(player.controls.shieldKey) : 'S'}" readonly onclick="startKeyCapture(${i}, 'shieldKey')">
             </div>
         `;
         playerSettingsDiv.appendChild(playerDiv);
@@ -969,13 +1086,21 @@ function cleanupCapture() {
 }
 
 function startGame() {
+    // 确保玩家数据已初始化
+    if (!gameSettings.players || gameSettings.players.length === 0) {
+        console.log('Initializing players in startGame');
+        initializePlayers();
+    }
+
     // 保存设置
     const playerCount = parseInt(document.getElementById('playerCount').value);
     gameSettings.playerCount = playerCount;
 
     for (let i = 0; i < playerCount; i++) {
-        const aimMode = document.querySelector(`input[name="aimMode${i}"]:checked`).value;
-        gameSettings.players[i].controls.aimMode = aimMode;
+        const aimMode = document.querySelector(`input[name="aimMode${i}"]:checked`);
+        if (aimMode && gameSettings.players[i]) {
+            gameSettings.players[i].controls.aimMode = aimMode.value;
+        }
     }
 
     // 隐藏设置面板
@@ -985,11 +1110,20 @@ function startGame() {
     initGame();
 }
 
-// 初始化玩家设置
-initializePlayers();
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    // 初始化玩家设置
+    initializePlayers();
+});
 
 // 游戏初始化
 function initGame() {
+    // 确保玩家数据已初始化
+    if (!gameSettings.players || gameSettings.players.length === 0) {
+        console.log('Initializing players in initGame');
+        initializePlayers();
+    }
+
     // 根据设置创建玩家
     const positions = [
         { x: SCREEN_WIDTH / 2, y: SCREEN_HEIGHT / 2 }, // 0人模式下的观察位置
@@ -1016,9 +1150,15 @@ function initGame() {
     // 创建玩家
     for (let i = 0; i < gameSettings.playerCount; i++) {
         const player = gameSettings.players[i];
+        if (!player) {
+            console.error(`Player ${i} not found in gameSettings.players`);
+            continue;
+        }
+
+        const playerColor = player.color || PLAYER_COLORS[i % PLAYER_COLORS.length];
         const pos = positions[i + 1] || positions[1];
 
-        eval(`player${i + 1} = new Player(pos.x, pos.y, player.color);`);
+        eval(`player${i + 1} = new Player(pos.x, pos.y, playerColor, player.team, player.id, player.name);`);
 
         // 创建触控控件（如果需要的话）
         if (isTouchDevice() || showTouchControls) {
@@ -1057,7 +1197,7 @@ function drawStatus() {
         const player = gameSettings.players[i];
         const x = 10 + (i * statusSpacing);
 
-        if (playerObj) {
+        if (player && playerObj) {
             let statusText;
             if (playerObj.shieldActive) {
                 const remainingTime = Math.max(0, playerObj.shieldDuration - (Date.now() - playerObj.shieldStartTime) / 1000);
@@ -1068,7 +1208,8 @@ function drawStatus() {
                 statusText = "护盾就绪";
             }
 
-            ctx.fillStyle = player.color;
+            const playerColor = player.color || PLAYER_COLORS[i % PLAYER_COLORS.length];
+            ctx.fillStyle = playerColor;
             ctx.textAlign = 'left';
             ctx.fillText(statusText, x, statusY);
         }
@@ -1097,10 +1238,11 @@ document.addEventListener('keydown', (event) => {
             const player = gameSettings.players[i];
             const playerObj = getPlayerObject(i);
 
-            if (playerObj && event.key === player.controls.shootKey && !playerObj.isShieldActive()) {
-                bullets.push(new Bullet(playerObj.x, playerObj.y, playerObj.angle + Math.PI, player.color, playerObj));
+            if (player && playerObj && event.key === player.controls.shootKey && !playerObj.isShieldActive()) {
+                const playerColor = player.color || PLAYER_COLORS[i % PLAYER_COLORS.length];
+                bullets.push(new Bullet(playerObj.x, playerObj.y, playerObj.angle + Math.PI, playerColor, playerObj));
                 playerObj.pushBack(2, playerObj.angle);
-            } else if (playerObj && event.key === player.controls.shieldKey) {
+            } else if (player && playerObj && event.key === player.controls.shieldKey) {
                 playerObj.activateShield();
             }
         }
@@ -1121,7 +1263,7 @@ document.addEventListener('keyup', (event) => {
     for (let i = 0; i < gameSettings.playerCount; i++) {
         const player = gameSettings.players[i];
         const playerObj = getPlayerObject(i);
-        if (playerObj && event.key === player.controls.shieldKey) {
+        if (player && playerObj && event.key === player.controls.shieldKey) {
             playerObj.deactivateShield();
         }
     }
@@ -1143,16 +1285,27 @@ document.addEventListener('mousedown', (event) => {
     mouseButtonsPressed[mouseKey] = true;
     lastMouseEventTime = Date.now();
 
-    if (!gameOver) {
+    if (gameOver && gameStats) {
+        // 游戏结束时检查排行榜切换
+        const canvasRect = canvas.getBoundingClientRect();
+        const clickX = event.clientX - canvasRect.left;
+        const clickY = event.clientY - canvasRect.top;
+
+        if (clickY >= SCREEN_HEIGHT / 2 - 50 && clickY <= SCREEN_HEIGHT / 2 + 50 &&
+            clickX >= SCREEN_WIDTH / 2 - 200 && clickX <= SCREEN_WIDTH / 2 + 200) {
+            toggleLeaderboardMode();
+        }
+    } else if (!gameOver) {
         // 检查所有玩家的鼠标按键
         for (let i = 0; i < gameSettings.playerCount; i++) {
             const player = gameSettings.players[i];
             const playerObj = getPlayerObject(i);
 
-            if (playerObj && mouseKey === player.controls.shootKey && !playerObj.isShieldActive()) {
-                bullets.push(new Bullet(playerObj.x, playerObj.y, playerObj.angle + Math.PI, player.color, playerObj));
+            if (player && playerObj && mouseKey === player.controls.shootKey && !playerObj.isShieldActive()) {
+                const playerColor = player.color || PLAYER_COLORS[i % PLAYER_COLORS.length];
+                bullets.push(new Bullet(playerObj.x, playerObj.y, playerObj.angle + Math.PI, playerColor, playerObj));
                 playerObj.pushBack(2, playerObj.angle);
-            } else if (playerObj && mouseKey === player.controls.shieldKey) {
+            } else if (player && playerObj && mouseKey === player.controls.shieldKey) {
                 playerObj.activateShield();
             }
         }
@@ -1170,7 +1323,7 @@ document.addEventListener('mouseup', (event) => {
     for (let i = 0; i < gameSettings.playerCount; i++) {
         const player = gameSettings.players[i];
         const playerObj = getPlayerObject(i);
-        if (playerObj && mouseKey === player.controls.shieldKey) {
+        if (player && playerObj && mouseKey === player.controls.shieldKey) {
             playerObj.deactivateShield();
         }
     }
@@ -1194,10 +1347,11 @@ document.addEventListener('wheel', (event) => {
             const player = gameSettings.players[i];
             const playerObj = getPlayerObject(i);
 
-            if (playerObj && wheelDirection === player.controls.shootKey && !playerObj.isShieldActive()) {
-                bullets.push(new Bullet(playerObj.x, playerObj.y, playerObj.angle + Math.PI, player.color, playerObj));
+            if (player && playerObj && wheelDirection === player.controls.shootKey && !playerObj.isShieldActive()) {
+                const playerColor = player.color || PLAYER_COLORS[i % PLAYER_COLORS.length];
+                bullets.push(new Bullet(playerObj.x, playerObj.y, playerObj.angle + Math.PI, playerColor, playerObj));
                 playerObj.pushBack(2, playerObj.angle);
-            } else if (playerObj && wheelDirection === player.controls.shieldKey) {
+            } else if (player && playerObj && wheelDirection === player.controls.shieldKey) {
                 playerObj.activateShield();
                 // 滚轮事件自动释放护盾
                 setTimeout(() => playerObj.deactivateShield(), 100);
@@ -1223,6 +1377,180 @@ function getPlayerObject(playerIndex) {
         case 11: return player12;
         default: return null;
     }
+}
+
+// 检查游戏结束条件
+function checkGameEndCondition() {
+    // 获取所有存活玩家的阵营
+    const aliveTeams = new Set();
+    const alivePlayers = [];
+
+    for (let i = 0; i < gameSettings.playerCount; i++) {
+        const playerObj = getPlayerObject(i);
+        if (playerObj && playerObj.isAlive && playerObj.health > 0) {
+            aliveTeams.add(playerObj.team);
+            alivePlayers.push(playerObj);
+        }
+    }
+
+    // 如果只剩一个阵营，游戏结束
+    if (aliveTeams.size === 1) {
+        gameOver = true;
+        const winningTeam = Array.from(aliveTeams)[0];
+        winner = `阵营 ${winningTeam + 1}`;
+
+        // 计算排行榜数据
+        calculateLeaderboards(alivePlayers, winningTeam);
+    } else if (aliveTeams.size === 0) {
+        // 所有玩家都死亡（极少情况）
+        gameOver = true;
+        winner = "平局";
+    }
+}
+
+// 计算排行榜数据
+function calculateLeaderboards(alivePlayers, winningTeam) {
+    // 获取所有玩家的统计数据
+    const allPlayers = [];
+    for (let i = 0; i < gameSettings.playerCount; i++) {
+        const playerObj = getPlayerObject(i);
+        if (playerObj) {
+            allPlayers.push(playerObj);
+        }
+    }
+
+    // 击杀数排行榜
+    const killLeaderboard = [...allPlayers].sort((a, b) => b.kills - a.kills);
+
+    // 伤害排行榜
+    const damageLeaderboard = [...allPlayers].sort((a, b) => b.damageDealt - a.damageDealt);
+
+    // 阵营击杀排行榜
+    const teamKillStats = {};
+    const teamDamageStats = {};
+
+    allPlayers.forEach(player => {
+        if (!teamKillStats[player.team]) {
+            teamKillStats[player.team] = { team: player.team, kills: 0, players: [] };
+            teamDamageStats[player.team] = { team: player.team, damage: 0, players: [] };
+        }
+        teamKillStats[player.team].kills += player.kills;
+        teamKillStats[player.team].players.push(player);
+        teamDamageStats[player.team].damage += player.damageDealt;
+        teamDamageStats[player.team].players.push(player);
+    });
+
+    const teamKillLeaderboard = Object.values(teamKillStats).sort((a, b) => b.kills - a.kills);
+    const teamDamageLeaderboard = Object.values(teamDamageStats).sort((a, b) => b.damage - a.damage);
+
+    // 保存排行榜数据
+    gameStats = {
+        winningTeam,
+        alivePlayers,
+        killLeaderboard,
+        damageLeaderboard,
+        teamKillLeaderboard,
+        teamDamageLeaderboard
+    };
+}
+
+// 绘制游戏结束屏幕
+function drawGameEndScreen() {
+    // 半透明背景
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+    // 标题
+    ctx.fillStyle = TEAM_COLORS[gameStats.winningTeam];
+    ctx.font = '36px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${winner} 获胜！`, SCREEN_WIDTH / 2, 60);
+
+    // 显示获胜阵营的玩家
+    ctx.fillStyle = WHITE;
+    ctx.font = '24px Arial';
+    ctx.fillText(`获胜玩家:`, SCREEN_WIDTH / 2, 100);
+
+    let yPos = 130;
+    gameStats.alivePlayers.forEach(player => {
+        ctx.fillStyle = player.color;
+        ctx.fillText(`玩家 ${player.playerId} (${player.playerName})`, SCREEN_WIDTH / 2, yPos);
+        yPos += 30;
+    });
+
+    // 排行榜标题
+    ctx.fillStyle = WHITE;
+    ctx.font = '20px Arial';
+    ctx.fillText('排行榜 (点击切换: 击杀数 / 伤害)', SCREEN_WIDTH / 2, yPos + 20);
+
+    // 绘制排行榜
+    drawLeaderboards(SCREEN_WIDTH / 2, yPos + 40);
+}
+
+// 排行榜显示模式
+let leaderboardMode = 'kills'; // 'kills' 或 'damage'
+
+// 绘制排行榜
+function drawLeaderboards(centerX, startY) {
+    const leftX = centerX - 150;
+    const rightX = centerX + 150;
+
+    // 左侧排行榜
+    ctx.fillStyle = WHITE;
+    ctx.font = '18px Arial';
+    ctx.textAlign = 'left';
+
+    let leftTitle, leftData;
+    if (leaderboardMode === 'kills') {
+        leftTitle = '击杀数排行';
+        leftData = gameStats.killLeaderboard.slice(0, 8); // 显示前8名
+    } else {
+        leftTitle = '伤害排行';
+        leftData = gameStats.damageLeaderboard.slice(0, 8);
+    }
+
+    ctx.fillText(leftTitle, leftX, startY);
+
+    leftData.forEach((player, index) => {
+        const y = startY + 30 + index * 25;
+        const stat = leaderboardMode === 'kills' ? player.kills : Math.round(player.damageDealt);
+
+        ctx.fillStyle = player.color;
+        ctx.fillText(`${index + 1}. 玩家${player.playerId}`, leftX, y);
+
+        ctx.fillStyle = WHITE;
+        ctx.fillText(stat.toString(), leftX + 120, y);
+    });
+
+    // 右侧排行榜（阵营）
+    ctx.textAlign = 'right';
+    let rightTitle, rightData;
+    if (leaderboardMode === 'kills') {
+        rightTitle = '阵营击杀排行';
+        rightData = gameStats.teamKillLeaderboard.slice(0, 6);
+    } else {
+        rightTitle = '阵营伤害排行';
+        rightData = gameStats.teamDamageLeaderboard.slice(0, 6);
+    }
+
+    ctx.fillStyle = WHITE;
+    ctx.fillText(rightTitle, rightX, startY);
+
+    rightData.forEach((team, index) => {
+        const y = startY + 30 + index * 25;
+        const stat = leaderboardMode === 'kills' ? team.kills : Math.round(team.damage);
+
+        ctx.fillStyle = TEAM_COLORS[team.team];
+        ctx.fillText(`阵营${team.team + 1}`, rightX - 40, y);
+
+        ctx.fillStyle = WHITE;
+        ctx.fillText(stat.toString(), rightX, y);
+    });
+}
+
+// 切换排行榜模式
+function toggleLeaderboardMode() {
+    leaderboardMode = leaderboardMode === 'kills' ? 'damage' : 'kills';
 }
 
 // 获取显示值
@@ -1257,6 +1585,11 @@ canvas.addEventListener('touchstart', (event) => {
                 initGame();
                 break;
             }
+            // 检查排行榜切换区域
+            if (gameStats && pos.y >= SCREEN_HEIGHT / 2 - 50 && pos.y <= SCREEN_HEIGHT / 2 + 50 &&
+                pos.x >= SCREEN_WIDTH / 2 - 200 && pos.x <= SCREEN_WIDTH / 2 + 200) {
+                toggleLeaderboardMode();
+            }
         } else {
             let handled = false;
 
@@ -1267,11 +1600,12 @@ canvas.addEventListener('touchstart', (event) => {
                 const button = eval(`button${i + 1}`);
                 const buttonShield = eval(`button${i + 1}Shield`);
 
-                if (!handled && playerObj && button && button.isPressed(pos)) {
-                    bullets.push(new Bullet(playerObj.x, playerObj.y, playerObj.angle + Math.PI, player.color, playerObj));
+                if (!handled && player && playerObj && button && button.isPressed(pos)) {
+                    const playerColor = player.color || PLAYER_COLORS[i % PLAYER_COLORS.length];
+                    bullets.push(new Bullet(playerObj.x, playerObj.y, playerObj.angle + Math.PI, playerColor, playerObj));
                     playerObj.pushBack(2, playerObj.angle);
                     handled = true;
-                } else if (!handled && playerObj && buttonShield && buttonShield.isPressed(pos)) {
+                } else if (!handled && player && playerObj && buttonShield && buttonShield.isPressed(pos)) {
                     playerObj.activateShield();
                     handled = true;
                 }
@@ -1333,8 +1667,9 @@ canvas.addEventListener('touchend', (event) => {
         // 检查所有玩家的护盾按钮释放
         for (let i = 0; i < gameSettings.playerCount; i++) {
             const playerObj = getPlayerObject(i);
+            const player = gameSettings.players[i];
             const buttonShield = eval(`button${i + 1}Shield`);
-            if (playerObj && buttonShield && buttonShield.isPressed(pos)) {
+            if (player && playerObj && buttonShield && buttonShield.isPressed(pos)) {
                 playerObj.deactivateShield();
             }
         }
@@ -1418,8 +1753,9 @@ function gameLoop(currentTime) {
             const player = gameSettings.players[i];
             const x = 10 + (i * healthSpacing);
 
-            if (playerObj) {
-                ctx.fillStyle = player.color;
+            if (player && playerObj) {
+                const playerColor = player.color || PLAYER_COLORS[i % PLAYER_COLORS.length];
+                ctx.fillStyle = playerColor;
                 ctx.textAlign = 'left';
                 ctx.fillText(`P${i + 1}: ${playerObj.health}`, x, healthY);
             }
@@ -1436,7 +1772,7 @@ function gameLoop(currentTime) {
             const player = gameSettings.players[i];
             const x = 10 + (i * statusSpacing);
 
-            if (playerObj) {
+            if (player && playerObj) {
                 let statusText;
                 if (playerObj.shieldActive) {
                     const remainingTime = Math.max(0, playerObj.shieldDuration - (Date.now() - playerObj.shieldStartTime) / 1000);
@@ -1447,7 +1783,8 @@ function gameLoop(currentTime) {
                     statusText = "护盾就绪";
                 }
 
-                ctx.fillStyle = player.color;
+                const playerColor = player.color || PLAYER_COLORS[i % PLAYER_COLORS.length];
+                ctx.fillStyle = playerColor;
                 ctx.textAlign = 'left';
                 ctx.fillText(statusText, x, statusY);
             }
@@ -1547,22 +1884,24 @@ function gameLoop(currentTime) {
             for (let p = 0; p < gameSettings.playerCount; p++) {
                 const targetPlayer = getPlayerObject(p);
                 if (targetPlayer && bullet.owner !== targetPlayer && Math.hypot(bullet.x - targetPlayer.x, bullet.y - targetPlayer.y) < targetPlayer.size + bullet.radius) {
-                    targetPlayer.health -= 10;
+                    const damage = 10;
+                    targetPlayer.health -= damage;
+                    targetPlayer.damageTaken += damage;
+
+                    // 记录攻击者的伤害统计
+                    bullet.owner.damageDealt += damage;
+
+                    // 如果玩家死亡，记录击杀数
+                    if (targetPlayer.health <= 0) {
+                        bullet.owner.kills += 1;
+                        targetPlayer.isAlive = false;
+                        // 检查是否只剩一个阵营
+                        checkGameEndCondition();
+                    }
+
                     bullet.explode(walls);
                     bullets.splice(i, 1);
                     hitPlayer = true;
-
-                    if (targetPlayer.health <= 0) {
-                        gameOver = true;
-                        // 找到获胜者
-                        for (let w = 0; w < gameSettings.playerCount; w++) {
-                            const winnerPlayer = getPlayerObject(w);
-                            if (winnerPlayer && winnerPlayer.health > 0) {
-                                winner = `玩家 ${w + 1}`;
-                                break;
-                            }
-                        }
-                    }
                     break;
                 }
             }
@@ -1616,8 +1955,9 @@ function gameLoop(currentTime) {
         const player = gameSettings.players[i];
         const x = 10 + (i * healthSpacing);
 
-        if (playerObj) {
-            ctx.fillStyle = player.color;
+        if (player && playerObj) {
+            const playerColor = player.color || PLAYER_COLORS[i % PLAYER_COLORS.length];
+            ctx.fillStyle = playerColor;
             ctx.textAlign = 'left';
             ctx.fillText(`P${i + 1}: ${playerObj.health}`, x, healthY);
         }
@@ -1625,10 +1965,16 @@ function gameLoop(currentTime) {
 
     // 游戏结束逻辑
     if (gameOver) {
-        ctx.fillStyle = BLACK;
-        ctx.font = '48px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(`${winner} Wins!`, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 20);
+        if (gameStats) {
+            // 显示获胜阵营和排行榜
+            drawGameEndScreen();
+        } else {
+            // 兼容旧的游戏结束显示
+            ctx.fillStyle = BLACK;
+            ctx.font = '48px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${winner} Wins!`, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 20);
+        }
         restartButton.draw();
     }
 
