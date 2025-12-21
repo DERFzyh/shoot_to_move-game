@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>阵营射击大战 - 主界面</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+        }
+
+        .main-container {
+            text-align: center;
+            color: white;
+            max-width: 800px;
+            padding: 40px;
+        }
+
+        .game-title {
+            font-size: 72px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            background: linear-gradient(45deg, #ffffff, #e0e0e0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .game-subtitle {
+            font-size: 24px;
+            margin-bottom: 60px;
+            opacity: 0.9;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .menu-button {
+            display: inline-block;
+            padding: 20px 40px;
+            font-size: 24px;
+            font-weight: bold;
+            text-decoration: none;
+            color: white;
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.3);
+            margin: 10px;
+        }
+
+        .menu-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 20px rgba(0, 0, 0, 0.4);
+            background: linear-gradient(45deg, #45a049, #4CAF50);
+        }
+
+        .menu-button:active {
+            transform: translateY(0);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .description {
+            font-size: 18px;
+            margin-top: 40px;
+            opacity: 0.8;
+            line-height: 1.6;
+        }
+
+        .team-colors {
+            display: flex;
+            justify-content: center;
+            margin-top: 30px;
+            gap: 10px;
+        }
+
+        .color-dot {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .color-dot.red { background-color: #FF0000; }
+        .color-dot.blue { background-color: #0000FF; }
+        .color-dot.green { background-color: #00FF00; }
+        .color-dot.yellow { background-color: #FFFF00; }
+        .color-dot.pink { background-color: #FF00FF; }
+        .color-dot.cyan { background-color: #00FFFF; }
+
+        @media (max-width: 768px) {
+            .game-title {
+                font-size: 48px;
+            }
+
+            .game-subtitle {
+                font-size: 18px;
+            }
+
+            .menu-button {
+                padding: 15px 30px;
+                font-size: 20px;
+            }
+
+            .main-container {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <h1 class="game-title">阵营射击大战</h1>
+        <p class="game-subtitle">Team Shooting Battle</p>
+
+        <button class="menu-button" onclick="startSinglePlayer()">单机游戏</button>
+
+        <div class="team-colors">
+            <div class="color-dot red" title="红阵营"></div>
+            <div class="color-dot blue" title="蓝阵营"></div>
+            <div class="color-dot green" title="绿阵营"></div>
+            <div class="color-dot yellow" title="黄阵营"></div>
+            <div class="color-dot pink" title="粉阵营"></div>
+            <div class="color-dot cyan" title="青阵营"></div>
+        </div>
+
+        <div class="description">
+            <p>🎯 选择你的阵营，与队友合作占领地图！</p>
+            <p>🏰 通过战斗占领墙壁，扩大你们的领土范围！</p>
+            <p>⚔️ 击败所有敌对阵营，成为最后的胜利者！</p>
+        </div>
+    </div>
+
+    <script>
+        function startSinglePlayer() {
+            // 跳转到设置界面
+            window.location.href = 'index.html';
+        }
+    </script>
+</body>
+</html>

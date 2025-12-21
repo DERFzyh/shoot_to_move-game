@@ -141,8 +141,8 @@ class Player {
                     collision = true;
                     break;
                 } else if (wall.wallType === 2) {
-                    if ((this.color === BLUE && (wall.color === LIGHT_RED || wall.color === WHITE)) ||
-                        (this.color === RED && (wall.color === LIGHT_BLUE || wall.color === WHITE))) {
+                    // 只有同阵营的墙才能通行，其他墙壁（包括中性和敌方阵营）都会阻挡
+                    if (wall.team !== this.team) {
                         collision = true;
                         break;
                     }
@@ -220,6 +220,7 @@ class Bullet {
         this.radius = 5;
         this.color = teamColor; // 使用阵营颜色
         this.trailColor = teamColor; // 轨迹也使用阵营颜色
+        this.team = owner.team; // 记录阵营ID
         this.creationTime = Date.now();
         this.trail = [{ x: x, y: y }]; // 子弹的行进路线
         this.active = true;
@@ -239,8 +240,8 @@ class Bullet {
                         collision = true;
                         break;
                     } else if (wall.wallType === 2) {
-                        if ((this.color === BLUE && (wall.color === LIGHT_RED || wall.color === WHITE)) ||
-                            (this.color === RED && (wall.color === LIGHT_BLUE || wall.color === WHITE))) {
+                        // 只有同阵营的墙才能通行，其他墙壁（包括中性和敌方阵营）都会阻挡
+                        if (wall.team !== this.team) {
                             collision = true;
                             break;
                         }
@@ -315,11 +316,12 @@ class Bullet {
         effectCtx.arc(this.x, this.y, 30, 0, Math.PI * 2);
         effectCtx.fill();
 
-        // 将距离25以内的墙2变为同色
+        // 将距离25以内的墙2变为发射子弹阵营的墙壁
         for (const wall of walls) {
             if (wall.wallType === 2) {
                 const distance = Math.hypot(wall.x + WALL_SIZE / 2 - this.x, wall.y + WALL_SIZE / 2 - this.y);
                 if (distance <= 25) {
+                    wall.team = this.team;
                     wall.color = this.trailColor;
                 }
             }
@@ -329,11 +331,12 @@ class Bullet {
 
 // 墙类 (Wall Class)
 class Wall {
-    constructor(x, y, wallType) {
+    constructor(x, y, wallType, team = -1) {
         this.x = x;
         this.y = y;
         this.wallType = wallType;
-        this.color = (wallType === 2) ? WHITE : null; // Type 2 墙默认是白色
+        this.team = team; // -1表示中性墙，0-5表示对应阵营的墙
+        this.color = (wallType === 2) ? (team >= 0 ? TEAM_COLORS[team] : WHITE) : null;
     }
 
     draw() {
@@ -510,7 +513,9 @@ function generateMap() {
                     }
                     rand -= weights[i];
                 }
-                walls.push(new Wall((x + 1) * WALL_SIZE, (y + 1) * WALL_SIZE, wallType));
+
+                // 初始所有墙壁都是中性的（team = -1）
+                walls.push(new Wall((x + 1) * WALL_SIZE, (y + 1) * WALL_SIZE, wallType, -1));
             }
         }
     }
@@ -792,7 +797,7 @@ function initializePlayers() {
     gameSettings.players = [];
     for (let i = 0; i < 12; i++) {
         const playerIndex = i % DEFAULT_CONTROLS.length;
-        // 平均分配阵营，最多6个阵营
+        // 默认平均分配阵营，最多6个阵营
         const team = Math.floor(i / 2) % 6; // 每2个玩家一个阵营，循环分配
 
         gameSettings.players.push({
@@ -816,6 +821,7 @@ let joystick1, joystick2, joystick3, joystick4, joystick5, joystick6, joystick7,
 let button1, button2, button3, button4, button5, button6, button7, button8, button9, button10, button11, button12;
 let button1Shield, button2Shield, button3Shield, button4Shield, button5Shield, button6Shield, button7Shield, button8Shield, button9Shield, button10Shield, button11Shield, button12Shield;
 let restartButton;
+let backToMenuButton;
 let bullets = [];
 let walls = [];
 let gameOver = false;
@@ -909,6 +915,11 @@ function toggleSettings() {
     gamePaused = panel.classList.contains('show');
 }
 
+// 回到主界面
+function backToMainMenu() {
+    window.location.href = 'main.html';
+}
+
 function updatePlayerSettings() {
     const playerCountSelect = document.getElementById('playerCount');
     if (!playerCountSelect) {
@@ -965,6 +976,18 @@ function updatePlayerSettings() {
         playerDiv.className = 'player-settings';
         playerDiv.innerHTML = `
             <h3 style="color: ${player.color || PLAYER_COLORS[i % PLAYER_COLORS.length]}">${player.name || `玩家${i + 1}`} (${teamName}阵营)</h3>
+
+            <div class="settings-group">
+                <label for="teamSelect${i}">阵营:</label>
+                <select id="teamSelect${i}" name="teamSelect${i}">
+                    <option value="0" ${player.team === 0 ? 'selected' : ''}>红阵营</option>
+                    <option value="1" ${player.team === 1 ? 'selected' : ''}>蓝阵营</option>
+                    <option value="2" ${player.team === 2 ? 'selected' : ''}>绿阵营</option>
+                    <option value="3" ${player.team === 3 ? 'selected' : ''}>黄阵营</option>
+                    <option value="4" ${player.team === 4 ? 'selected' : ''}>粉阵营</option>
+                    <option value="5" ${player.team === 5 ? 'selected' : ''}>青阵营</option>
+                </select>
+            </div>
 
             <div class="settings-group">
                 <div class="radio-group">
@@ -1097,6 +1120,13 @@ function startGame() {
     gameSettings.playerCount = playerCount;
 
     for (let i = 0; i < playerCount; i++) {
+        // 保存阵营选择
+        const teamSelect = document.getElementById(`teamSelect${i}`);
+        if (teamSelect && gameSettings.players[i]) {
+            gameSettings.players[i].team = parseInt(teamSelect.value);
+        }
+
+        // 保存瞄准模式
         const aimMode = document.querySelector(`input[name="aimMode${i}"]:checked`);
         if (aimMode && gameSettings.players[i]) {
             gameSettings.players[i].controls.aimMode = aimMode.value;
@@ -1173,7 +1203,8 @@ function initGame() {
         }
     }
 
-    restartButton = new Button(SCREEN_WIDTH / 2 - 50, SCREEN_HEIGHT / 2 + 50, 100, 50, "Restart");
+    restartButton = new Button(SCREEN_WIDTH / 2 - 110, SCREEN_HEIGHT / 2 + 50, 100, 50, "重新开始");
+    backToMenuButton = new Button(SCREEN_WIDTH / 2 + 10, SCREEN_HEIGHT / 2 + 50, 100, 50, "主界面");
 
     bullets = [];
     walls = generateMap();
@@ -1239,8 +1270,7 @@ document.addEventListener('keydown', (event) => {
             const playerObj = getPlayerObject(i);
 
             if (player && playerObj && event.key === player.controls.shootKey && !playerObj.isShieldActive()) {
-                const playerColor = player.color || PLAYER_COLORS[i % PLAYER_COLORS.length];
-                bullets.push(new Bullet(playerObj.x, playerObj.y, playerObj.angle + Math.PI, playerColor, playerObj));
+                bullets.push(new Bullet(playerObj.x, playerObj.y, playerObj.angle + Math.PI, playerObj.teamColor, playerObj));
                 playerObj.pushBack(2, playerObj.angle);
             } else if (player && playerObj && event.key === player.controls.shieldKey) {
                 playerObj.activateShield();
@@ -1285,25 +1315,14 @@ document.addEventListener('mousedown', (event) => {
     mouseButtonsPressed[mouseKey] = true;
     lastMouseEventTime = Date.now();
 
-    if (gameOver && gameStats) {
-        // 游戏结束时检查排行榜切换
-        const canvasRect = canvas.getBoundingClientRect();
-        const clickX = event.clientX - canvasRect.left;
-        const clickY = event.clientY - canvasRect.top;
-
-        if (clickY >= SCREEN_HEIGHT / 2 - 50 && clickY <= SCREEN_HEIGHT / 2 + 50 &&
-            clickX >= SCREEN_WIDTH / 2 - 200 && clickX <= SCREEN_WIDTH / 2 + 200) {
-            toggleLeaderboardMode();
-        }
-    } else if (!gameOver) {
+    if (!gameOver) {
         // 检查所有玩家的鼠标按键
         for (let i = 0; i < gameSettings.playerCount; i++) {
             const player = gameSettings.players[i];
             const playerObj = getPlayerObject(i);
 
             if (player && playerObj && mouseKey === player.controls.shootKey && !playerObj.isShieldActive()) {
-                const playerColor = player.color || PLAYER_COLORS[i % PLAYER_COLORS.length];
-                bullets.push(new Bullet(playerObj.x, playerObj.y, playerObj.angle + Math.PI, playerColor, playerObj));
+                bullets.push(new Bullet(playerObj.x, playerObj.y, playerObj.angle + Math.PI, playerObj.teamColor, playerObj));
                 playerObj.pushBack(2, playerObj.angle);
             } else if (player && playerObj && mouseKey === player.controls.shieldKey) {
                 playerObj.activateShield();
@@ -1348,8 +1367,7 @@ document.addEventListener('wheel', (event) => {
             const playerObj = getPlayerObject(i);
 
             if (player && playerObj && wheelDirection === player.controls.shootKey && !playerObj.isShieldActive()) {
-                const playerColor = player.color || PLAYER_COLORS[i % PLAYER_COLORS.length];
-                bullets.push(new Bullet(playerObj.x, playerObj.y, playerObj.angle + Math.PI, playerColor, playerObj));
+                bullets.push(new Bullet(playerObj.x, playerObj.y, playerObj.angle + Math.PI, playerObj.teamColor, playerObj));
                 playerObj.pushBack(2, playerObj.angle);
             } else if (player && playerObj && wheelDirection === player.controls.shieldKey) {
                 playerObj.activateShield();
@@ -1456,18 +1474,24 @@ function calculateLeaderboards(alivePlayers, winningTeam) {
 
 // 绘制游戏结束屏幕
 function drawGameEndScreen() {
-    // 半透明背景
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    // 绘制地图和涂鸦作为背景
+    ctx.drawImage(effectCanvas, 0, 0); // 绘制涂鸦效果
+    for (const wall of walls) {
+        wall.draw(); // 绘制墙壁
+    }
+
+    // 添加淡灰色半透明覆盖层，使文字更清晰
+    ctx.fillStyle = 'rgba(128, 128, 128, 0.7)';
     ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
     // 标题
-    ctx.fillStyle = TEAM_COLORS[gameStats.winningTeam];
+    ctx.fillStyle = 'rgb(64, 64, 64)'; // 深灰色文字
     ctx.font = '36px Arial';
     ctx.textAlign = 'center';
     ctx.fillText(`${winner} 获胜！`, SCREEN_WIDTH / 2, 60);
 
     // 显示获胜阵营的玩家
-    ctx.fillStyle = WHITE;
+    ctx.fillStyle = 'rgb(64, 64, 64)'; // 深灰色文字
     ctx.font = '24px Arial';
     ctx.fillText(`获胜玩家:`, SCREEN_WIDTH / 2, 100);
 
@@ -1479,12 +1503,16 @@ function drawGameEndScreen() {
     });
 
     // 排行榜标题
-    ctx.fillStyle = WHITE;
+    ctx.fillStyle = 'rgb(64, 64, 64)'; // 深灰色文字
     ctx.font = '20px Arial';
     ctx.fillText('排行榜 (点击切换: 击杀数 / 伤害)', SCREEN_WIDTH / 2, yPos + 20);
 
     // 绘制排行榜
     drawLeaderboards(SCREEN_WIDTH / 2, yPos + 40);
+
+    // 绘制按钮
+    restartButton.draw();
+    backToMenuButton.draw();
 }
 
 // 排行榜显示模式
@@ -1496,7 +1524,7 @@ function drawLeaderboards(centerX, startY) {
     const rightX = centerX + 150;
 
     // 左侧排行榜
-    ctx.fillStyle = WHITE;
+    ctx.fillStyle = 'rgb(64, 64, 64)'; // 深灰色文字
     ctx.font = '18px Arial';
     ctx.textAlign = 'left';
 
@@ -1518,7 +1546,7 @@ function drawLeaderboards(centerX, startY) {
         ctx.fillStyle = player.color;
         ctx.fillText(`${index + 1}. 玩家${player.playerId}`, leftX, y);
 
-        ctx.fillStyle = WHITE;
+        ctx.fillStyle = 'rgb(64, 64, 64)'; // 深灰色文字
         ctx.fillText(stat.toString(), leftX + 120, y);
     });
 
@@ -1533,7 +1561,7 @@ function drawLeaderboards(centerX, startY) {
         rightData = gameStats.teamDamageLeaderboard.slice(0, 6);
     }
 
-    ctx.fillStyle = WHITE;
+    ctx.fillStyle = 'rgb(64, 64, 64)'; // 深灰色文字
     ctx.fillText(rightTitle, rightX, startY);
 
     rightData.forEach((team, index) => {
@@ -1543,7 +1571,7 @@ function drawLeaderboards(centerX, startY) {
         ctx.fillStyle = TEAM_COLORS[team.team];
         ctx.fillText(`阵营${team.team + 1}`, rightX - 40, y);
 
-        ctx.fillStyle = WHITE;
+        ctx.fillStyle = 'rgb(64, 64, 64)'; // 深灰色文字
         ctx.fillText(stat.toString(), rightX, y);
     });
 }
@@ -1585,6 +1613,10 @@ canvas.addEventListener('touchstart', (event) => {
                 initGame();
                 break;
             }
+            if (backToMenuButton.isPressed(pos)) {
+                backToMainMenu();
+                break;
+            }
             // 检查排行榜切换区域
             if (gameStats && pos.y >= SCREEN_HEIGHT / 2 - 50 && pos.y <= SCREEN_HEIGHT / 2 + 50 &&
                 pos.x >= SCREEN_WIDTH / 2 - 200 && pos.x <= SCREEN_WIDTH / 2 + 200) {
@@ -1601,8 +1633,7 @@ canvas.addEventListener('touchstart', (event) => {
                 const buttonShield = eval(`button${i + 1}Shield`);
 
                 if (!handled && player && playerObj && button && button.isPressed(pos)) {
-                    const playerColor = player.color || PLAYER_COLORS[i % PLAYER_COLORS.length];
-                    bullets.push(new Bullet(playerObj.x, playerObj.y, playerObj.angle + Math.PI, playerColor, playerObj));
+                    bullets.push(new Bullet(playerObj.x, playerObj.y, playerObj.angle + Math.PI, playerObj.teamColor, playerObj));
                     playerObj.pushBack(2, playerObj.angle);
                     handled = true;
                 } else if (!handled && player && playerObj && buttonShield && buttonShield.isPressed(pos)) {
@@ -1705,6 +1736,28 @@ canvas.addEventListener('contextmenu', (event) => {
 
 canvas.addEventListener('mousedown', (event) => {
     lastMouseEventTime = Date.now();
+
+    if (gameOver) {
+        const canvasRect = canvas.getBoundingClientRect();
+        const clickX = event.clientX - canvasRect.left;
+        const clickY = event.clientY - canvasRect.top;
+        const pos = { x: clickX, y: clickY };
+
+        if (restartButton.isPressed(pos)) {
+            initGame();
+            return;
+        }
+        if (backToMenuButton.isPressed(pos)) {
+            backToMainMenu();
+            return;
+        }
+
+        // 检查排行榜切换区域
+        if (gameStats && clickY >= SCREEN_HEIGHT / 2 - 50 && clickY <= SCREEN_HEIGHT / 2 + 50 &&
+            clickX >= SCREEN_WIDTH / 2 - 200 && clickX <= SCREEN_WIDTH / 2 + 200) {
+            toggleLeaderboardMode();
+        }
+    }
 });
 
 // 游戏主循环
@@ -1728,13 +1781,13 @@ function gameLoop(currentTime) {
             wall.draw();
         }
 
-        // 绘制玩家
-        for (let i = 0; i < gameSettings.playerCount; i++) {
-            const playerObj = getPlayerObject(i);
-            if (playerObj) {
-                playerObj.draw();
-            }
+    // 绘制玩家
+    for (let i = 0; i < gameSettings.playerCount; i++) {
+        const playerObj = getPlayerObject(i);
+        if (playerObj && playerObj.isAlive) {
+            playerObj.draw();
         }
+    }
 
         // 绘制子弹
         for (const bullet of bullets) {
@@ -1753,7 +1806,7 @@ function gameLoop(currentTime) {
             const player = gameSettings.players[i];
             const x = 10 + (i * healthSpacing);
 
-            if (player && playerObj) {
+            if (player && playerObj && playerObj.isAlive) {
                 const playerColor = player.color || PLAYER_COLORS[i % PLAYER_COLORS.length];
                 ctx.fillStyle = playerColor;
                 ctx.textAlign = 'left';
@@ -1801,6 +1854,34 @@ function gameLoop(currentTime) {
         return;
     }
 
+    // 如果游戏结束，只显示结束界面
+    if (gameOver) {
+        if (gameStats) {
+            drawGameEndScreen();
+        } else {
+            ctx.fillStyle = BLACK;
+            ctx.font = '48px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${winner} Wins!`, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 20);
+        }
+        restartButton.draw();
+        return;
+    }
+
+    // 如果游戏结束，只显示结束界面
+    if (gameOver) {
+        if (gameStats) {
+            drawGameEndScreen();
+        } else {
+            ctx.fillStyle = BLACK;
+            ctx.font = '48px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${winner} Wins!`, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 20);
+        }
+        restartButton.draw();
+        return;
+    }
+
     // 绘制子弹的路线和爆炸效果
     ctx.drawImage(effectCanvas, 0, 0);
 
@@ -1814,7 +1895,7 @@ function gameLoop(currentTime) {
         const player = gameSettings.players[i];
         const playerObj = getPlayerObject(i);
 
-        if (playerObj && player.controls.aimMode === 'keys') {
+        if (playerObj && playerObj.isAlive && player.controls.aimMode === 'keys') {
             if (keysPressed[player.controls.leftKey]) playerObj.angle -= 0.1;
             if (keysPressed[player.controls.rightKey]) playerObj.angle += 0.1;
         }
@@ -1826,11 +1907,11 @@ function gameLoop(currentTime) {
             const player = gameSettings.players[i];
             const playerObj = getPlayerObject(i);
 
-            if (playerObj && player.controls.aimMode === 'mouse') {
+            if (playerObj && playerObj.isAlive && player.controls.aimMode === 'mouse') {
                 // 鼠标对准模式
                 const angleToMouse = Math.atan2(mouseY - playerObj.y, mouseX - playerObj.x);
                 playerObj.rotate(angleToMouse);
-            } else if (playerObj) {
+            } else if (playerObj && playerObj.isAlive) {
                 // 摇杆控制
                 const joystick = eval(`joystick${i + 1}`);
                 if (joystick && (joystick.dx !== 0 || joystick.dy !== 0)) {
@@ -1842,7 +1923,7 @@ function gameLoop(currentTime) {
         // 移动玩家
         for (let i = 0; i < gameSettings.playerCount; i++) {
             const playerObj = getPlayerObject(i);
-            if (playerObj) {
+            if (playerObj && playerObj.isAlive) {
                 playerObj.move(walls);
                 playerObj.update(deltaTime);
             }
@@ -1895,6 +1976,11 @@ function gameLoop(currentTime) {
                     if (targetPlayer.health <= 0) {
                         bullet.owner.kills += 1;
                         targetPlayer.isAlive = false;
+
+                        // 从游戏中完全移除死亡玩家
+                        const playerIndex = targetPlayer.playerId - 1;
+                        eval(`player${playerIndex + 1} = null;`);
+
                         // 检查是否只剩一个阵营
                         checkGameEndCondition();
                     }
@@ -1912,7 +1998,7 @@ function gameLoop(currentTime) {
     // 绘制玩家
     for (let i = 0; i < gameSettings.playerCount; i++) {
         const playerObj = getPlayerObject(i);
-        if (playerObj) {
+        if (playerObj && playerObj.isAlive) {
             playerObj.draw();
         }
     }
@@ -1955,7 +2041,7 @@ function gameLoop(currentTime) {
         const player = gameSettings.players[i];
         const x = 10 + (i * healthSpacing);
 
-        if (player && playerObj) {
+        if (player && playerObj && playerObj.isAlive) {
             const playerColor = player.color || PLAYER_COLORS[i % PLAYER_COLORS.length];
             ctx.fillStyle = playerColor;
             ctx.textAlign = 'left';

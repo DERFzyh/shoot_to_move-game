@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shoot to Move Game</title>
+    <title>阵营射击大战 - 设置</title>
     <style>
         body {
             margin: 0;
@@ -129,6 +129,11 @@
             color: white;
         }
 
+        .back-to-menu-btn {
+            background-color: #2196F3;
+            color: white;
+        }
+
         .settings-toggle-btn {
             position: absolute;
             top: 30px;
@@ -189,6 +194,7 @@
 
         <div class="settings-buttons">
             <button class="start-game-btn" onclick="startGame()">开始游戏</button>
+            <button class="back-to-menu-btn" onclick="backToMainMenu()">回到主界面</button>
             <button class="cancel-btn" onclick="toggleSettings()">取消</button>
         </div>
     </div>
