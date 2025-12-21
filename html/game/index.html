@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>阵营射击大战 - 设置</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f0f0;
+        }
+        canvas {
+            border: 1px solid black;
+            background-color: white;
+        }
+
+        .settings-panel {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            border: 2px solid black;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .settings-panel.show {
+            display: block;
+        }
+
+        .settings-panel h2 {
+            margin-top: 0;
+            text-align: center;
+        }
+
+        .settings-group {
+            margin-bottom: 20px;
+        }
+
+        .settings-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .settings-group select, .settings-group input {
+            width: 100%;
+            padding: 5px;
+            font-size: 16px;
+        }
+
+        .settings-group input[type="text"] {
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .settings-group input[type="text"]:focus {
+            border-color: #2196F3;
+            outline: none;
+        }
+
+        .player-settings {
+            border: 1px solid #ccc;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+        }
+
+        .player-settings h3 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        .control-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .control-group label {
+            flex: 1;
+        }
+
+        .control-group input {
+            flex: 2;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 10px;
+        }
+
+        .radio-group label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .radio-group input[type="radio"] {
+            margin-right: 5px;
+        }
+
+        .settings-buttons {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+
+        .settings-buttons button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+        }
+
+        .start-game-btn {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .cancel-btn {
+            background-color: #f44336;
+            color: white;
+        }
+
+        .back-to-menu-btn {
+            background-color: #2196F3;
+            color: white;
+        }
+
+        .settings-toggle-btn {
+            position: absolute;
+            top: 30px;
+            right: 10px;
+            padding: 8px 16px;
+            font-size: 14px;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .key-capture-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.1);
+            z-index: 10000;
+            cursor: default;
+        }
+
+        .pause-menu {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(255, 255, 255, 0.85);
+            border: 2px solid #ccc;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            z-index: 10001;
+            min-width: 300px;
+            text-align: center;
+            backdrop-filter: blur(8px);
+        }
+
+        .pause-menu.show {
+            display: block;
+        }
+
+        .pause-menu h2 {
+            margin-top: 0;
+            color: #333;
+            font-size: 28px;
+        }
+
+        .pause-menu button {
+            display: block;
+            width: 100%;
+            margin: 10px 0;
+            padding: 12px;
+            font-size: 18px;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background-color: rgba(245, 245, 245, 0.9);
+            color: #333;
+            border: 1px solid rgba(221, 221, 221, 0.8);
+        }
+
+        .pause-menu .continue-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+        }
+
+        .pause-menu .end-game-btn {
+            background-color: #666;
+            color: white;
+            border: none;
+        }
+
+        .pause-menu button:hover {
+            background-color: #e0e0e0;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .pause-menu .continue-btn:hover {
+            background-color: #45a049;
+        }
+
+        .pause-menu .end-game-btn:hover {
+            background-color: #555;
+        }
+
+        .pause-menu button:active {
+            transform: translateY(0);
+        }
+
+        .game-end-screen {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(128, 128, 128, 0.7);
+            z-index: 10002;
+            overflow-y: auto;
+        }
+
+        .game-end-screen.show {
+            display: block;
+        }
+
+        .end-content {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 30px;
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .winner-title {
+            text-align: center;
+            color: rgb(64, 64, 64);
+            font-size: 36px;
+            margin-bottom: 30px;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        .alive-players-section {
+            margin-bottom: 30px;
+        }
+
+        .alive-players-section h2 {
+            color: rgb(64, 64, 64);
+            font-size: 24px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .alive-players-list {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        .alive-player-item {
+            padding: 10px 20px;
+            background-color: rgba(245, 245, 245, 0.8);
+            border-radius: 25px;
+            font-weight: bold;
+            font-size: 18px;
+            border: 2px solid transparent;
+        }
+
+        .leaderboard-section h2 {
+            color: rgb(64, 64, 64);
+            font-size: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+
+        .leaderboard-section h2:hover {
+            color: rgb(100, 100, 100);
+        }
+
+        .leaderboard-container {
+            display: flex;
+            justify-content: space-around;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .leaderboard-column {
+            flex: 1;
+            text-align: center;
+        }
+
+        .leaderboard-column h3 {
+            color: rgb(64, 64, 64);
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+
+        .leaderboard-list {
+            background-color: rgba(250, 250, 250, 0.8);
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .leaderboard-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            margin: 5px 0;
+            background-color: rgba(255, 255, 255, 0.6);
+            border-radius: 6px;
+            font-size: 16px;
+        }
+
+        .leaderboard-rank {
+            font-weight: bold;
+            min-width: 30px;
+        }
+
+        .leaderboard-name {
+            flex: 1;
+            text-align: left;
+            font-weight: bold;
+        }
+
+        .leaderboard-stat {
+            min-width: 40px;
+            text-align: right;
+            color: rgb(64, 64, 64);
+        }
+
+        .end-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .end-buttons button {
+            padding: 12px 24px;
+            font-size: 18px;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .end-buttons .restart-btn {
+            background-color: #FF9800;
+            color: white;
+        }
+
+        .end-buttons .restart-btn:hover {
+            background-color: #F57C00;
+            transform: translateY(-1px);
+        }
+
+        .end-buttons .main-menu-btn {
+            background-color: #9C27B0;
+            color: white;
+        }
+
+        .end-buttons .main-menu-btn:hover {
+            background-color: #7B1FA2;
+            transform: translateY(-1px);
+        }
+
+        @media (max-width: 768px) {
+            .end-content {
+                margin: 20px;
+                padding: 20px;
+            }
+
+            .winner-title {
+                font-size: 28px;
+            }
+
+            .leaderboard-container {
+                flex-direction: column;
+                gap: 20px;
+            }
+
+            .end-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .end-buttons button {
+                width: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+    <!-- 全屏遮罩层，用于录制按键时覆盖整个屏幕 -->
+    <div id="keyCaptureOverlay" class="key-capture-overlay" style="display: none;"></div>
+
+    <!-- 暂停菜单 -->
+    <div id="pauseMenu" class="pause-menu">
+        <h2>游戏暂停</h2>
+        <button class="continue-btn" onclick="resumeGame()">继续游戏</button>
+        <button class="settings-btn" onclick="openSettingsFromPause()">设置</button>
+        <button class="restart-btn" onclick="restartGame()">重新开始</button>
+        <button class="main-menu-btn" onclick="backToMainMenu()">返回主菜单</button>
+        <button class="end-game-btn" onclick="endGameImmediately()">立刻结束游戏</button>
+    </div>
+
+    <!-- 游戏结束界面 -->
+    <div id="gameEndScreen" class="game-end-screen">
+        <div class="end-content">
+            <h1 id="winnerTitle" class="winner-title"></h1>
+
+            <div class="alive-players-section">
+                <h2>获胜玩家:</h2>
+                <div id="alivePlayersList" class="alive-players-list"></div>
+            </div>
+
+            <div class="leaderboard-section">
+                <h2 id="leaderboardTitle">排行榜 (点击切换: 击杀数 / 伤害)</h2>
+                <div class="leaderboard-container">
+                    <div class="leaderboard-column">
+                        <h3 id="leftLeaderboardTitle"></h3>
+                        <div id="leftLeaderboard" class="leaderboard-list"></div>
+                    </div>
+                    <div class="leaderboard-column">
+                        <h3 id="rightLeaderboardTitle"></h3>
+                        <div id="rightLeaderboard" class="leaderboard-list"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="end-buttons">
+                <button class="restart-btn" onclick="initGame()">重新开始</button>
+                <button class="main-menu-btn" onclick="backToMainMenu()">返回主菜单</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="settingsPanel" class="settings-panel">
+        <h2>游戏设置</h2>
+
+        <div class="settings-group">
+            <label for="playerCount">玩家人数:</label>
+            <select id="playerCount" onchange="onPlayerCountChange()">
+                <option value="0">0人 (仅观察)</option>
+                <option value="1">1人</option>
+                <option value="2" selected>2人</option>
+                <option value="3">3人</option>
+                <option value="4">4人</option>
+                <option value="5">5人</option>
+                <option value="6">6人</option>
+                <option value="7">7人</option>
+                <option value="8">8人</option>
+                <option value="9">9人</option>
+                <option value="10">10人</option>
+                <option value="11">11人</option>
+                <option value="12">12人</option>
+            </select>
+        </div>
+
+        <div id="playerSettings">
+            <!-- 玩家设置将在这里动态生成 -->
+        </div>
+
+        <div class="settings-buttons">
+            <button class="start-game-btn" onclick="saveSettingsAndResume()">保存更改</button>
+            <button class="cancel-btn" onclick="discardSettingsAndResume()">放弃更改</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
