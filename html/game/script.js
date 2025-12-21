@@ -900,7 +900,48 @@ function onPlayerCountChange() {
     updatePlayerSettings();
 }
 
-// 设置界面函数
+// 验证玩家名字是否重复
+function validatePlayerName(playerIndex) {
+    const nameInput = document.getElementById(`playerName${playerIndex}`);
+    const errorSpan = document.getElementById(`nameError${playerIndex}`);
+    const playerTitle = document.getElementById(`playerTitle${playerIndex}`);
+    const currentName = nameInput.value.trim();
+
+    if (currentName === '') {
+        errorSpan.textContent = '名字不能为空';
+        errorSpan.style.display = 'block';
+        nameInput.style.borderColor = 'red';
+        return false;
+    }
+
+    // 检查与其他玩家的名字是否重复
+    const playerCount = parseInt(document.getElementById('playerCount').value);
+    for (let i = 0; i < playerCount; i++) {
+        if (i !== playerIndex) {
+            const otherNameInput = document.getElementById(`playerName${i}`);
+            if (otherNameInput && otherNameInput.value.trim() === currentName) {
+                errorSpan.textContent = '名字不能重复';
+                errorSpan.style.display = 'block';
+                nameInput.style.borderColor = 'red';
+                return false;
+            }
+        }
+    }
+
+    // 验证通过，更新标题显示
+    errorSpan.style.display = 'none';
+    nameInput.style.borderColor = '#ccc';
+
+    if (playerTitle) {
+        const player = gameSettings.players[playerIndex];
+        const teamName = ['红', '蓝', '绿', '黄', '粉', '青'][player.team] || `阵营${player.team + 1}`;
+        playerTitle.textContent = `${currentName} (${teamName}阵营)`;
+    }
+
+    return true;
+}
+
+// 设置界面函数（保留用于兼容性，但主要通过暂停菜单调用）
 function toggleSettings() {
     const panel = document.getElementById('settingsPanel');
     const wasShown = panel.classList.contains('show');
@@ -918,6 +959,253 @@ function toggleSettings() {
 // 回到主界面
 function backToMainMenu() {
     window.location.href = '../main.html';
+}
+
+// 暂停游戏
+function pauseGame() {
+    gamePaused = true;
+    const pauseMenu = document.getElementById('pauseMenu');
+    if (pauseMenu) {
+        pauseMenu.classList.add('show');
+    }
+}
+
+// 恢复游戏
+function resumeGame() {
+    gamePaused = false;
+    const pauseMenu = document.getElementById('pauseMenu');
+    if (pauseMenu) {
+        pauseMenu.classList.remove('show');
+    }
+    const settingsPanel = document.getElementById('settingsPanel');
+    if (settingsPanel) {
+        settingsPanel.classList.remove('show');
+    }
+}
+
+// 从暂停菜单打开设置
+function openSettingsFromPause() {
+    const pauseMenu = document.getElementById('pauseMenu');
+    if (pauseMenu) {
+        pauseMenu.classList.remove('show');
+    }
+    const settingsPanel = document.getElementById('settingsPanel');
+    if (settingsPanel) {
+        settingsPanel.classList.add('show');
+    }
+    updatePlayerSettings();
+}
+
+// 保存设置并恢复游戏
+function saveSettingsAndResume() {
+    // 验证所有玩家名字
+    const playerCount = parseInt(document.getElementById('playerCount').value);
+    let hasErrors = false;
+    for (let i = 0; i < playerCount; i++) {
+        if (!validatePlayerName(i)) {
+            hasErrors = true;
+        }
+    }
+
+    if (hasErrors) {
+        alert('请修正玩家名字错误后再保存！');
+        return;
+    }
+
+    // 保存设置
+    gameSettings.playerCount = playerCount;
+
+    for (let i = 0; i < playerCount; i++) {
+        // 保存玩家名字
+        const nameInput = document.getElementById(`playerName${i}`);
+        if (nameInput && gameSettings.players[i]) {
+            gameSettings.players[i].name = nameInput.value.trim();
+        }
+
+        // 保存阵营选择
+        const teamSelect = document.getElementById(`teamSelect${i}`);
+        if (teamSelect && gameSettings.players[i]) {
+            gameSettings.players[i].team = parseInt(teamSelect.value);
+        }
+
+        // 保存瞄准模式
+        const aimMode = document.querySelector(`input[name="aimMode${i}"]:checked`);
+        if (aimMode && gameSettings.players[i]) {
+            gameSettings.players[i].controls.aimMode = aimMode.value;
+        }
+    }
+
+    // 隐藏设置面板并恢复游戏
+    const settingsPanel = document.getElementById('settingsPanel');
+    if (settingsPanel) {
+        settingsPanel.classList.remove('show');
+    }
+    gamePaused = false;
+}
+
+// 放弃设置更改并恢复游戏
+function discardSettingsAndResume() {
+    // 重新加载设置（放弃更改）
+    updatePlayerSettings();
+
+    // 隐藏设置面板并恢复游戏
+    const settingsPanel = document.getElementById('settingsPanel');
+    if (settingsPanel) {
+        settingsPanel.classList.remove('show');
+    }
+    gamePaused = false;
+}
+
+// 重新开始游戏
+function restartGame() {
+    // 隐藏暂停菜单
+    const pauseMenu = document.getElementById('pauseMenu');
+    if (pauseMenu) {
+        pauseMenu.classList.remove('show');
+    }
+
+    // 重新初始化游戏
+    initGame();
+}
+
+// 显示HTML结束界面
+function showHtmlEndScreen() {
+    const endScreen = document.getElementById('gameEndScreen');
+    if (endScreen && gameStats) {
+        updateHtmlEndScreen();
+        endScreen.classList.add('show');
+    }
+}
+
+// 更新HTML结束界面内容
+function updateHtmlEndScreen() {
+    // 更新获胜标题
+    const winnerTitle = document.getElementById('winnerTitle');
+    winnerTitle.textContent = `${winner} 获胜！`;
+
+    // 更新存活玩家列表
+    const alivePlayersList = document.getElementById('alivePlayersList');
+    alivePlayersList.innerHTML = '';
+
+    gameStats.alivePlayers.forEach(player => {
+        const playerItem = document.createElement('div');
+        playerItem.className = 'alive-player-item';
+        playerItem.style.borderColor = player.color;
+        playerItem.style.color = player.color;
+        playerItem.textContent = player.playerName;
+        alivePlayersList.appendChild(playerItem);
+    });
+
+    // 更新排行榜
+    updateHtmlLeaderboards();
+
+    // 添加排行榜标题点击事件
+    const leaderboardTitle = document.getElementById('leaderboardTitle');
+    if (leaderboardTitle) {
+        leaderboardTitle.onclick = toggleLeaderboardMode;
+        leaderboardTitle.style.cursor = 'pointer';
+    }
+}
+
+// 更新HTML排行榜
+function updateHtmlLeaderboards() {
+    const leftTitle = document.getElementById('leftLeaderboardTitle');
+    const rightTitle = document.getElementById('rightLeaderboardTitle');
+    const leftList = document.getElementById('leftLeaderboard');
+    const rightList = document.getElementById('rightLeaderboard');
+
+    let leftData, rightData;
+
+    if (leaderboardMode === 'kills') {
+        leftTitle.textContent = '击杀数排行';
+        rightTitle.textContent = '阵营击杀排行';
+        leftData = gameStats.killLeaderboard.slice(0, 8);
+        rightData = gameStats.teamKillLeaderboard.slice(0, 6);
+    } else {
+        leftTitle.textContent = '伤害排行';
+        rightTitle.textContent = '阵营伤害排行';
+        leftData = gameStats.damageLeaderboard.slice(0, 8);
+        rightData = gameStats.teamDamageLeaderboard.slice(0, 6);
+    }
+
+    // 更新左侧排行榜（玩家）
+    leftList.innerHTML = '';
+    leftData.forEach((player, index) => {
+        const item = document.createElement('div');
+        item.className = 'leaderboard-item';
+        const stat = leaderboardMode === 'kills' ? player.kills : Math.round(player.damageDealt);
+
+        item.innerHTML = `
+            <span class="leaderboard-rank">${index + 1}.</span>
+            <span class="leaderboard-name" style="color: ${player.color}">${player.playerName}</span>
+            <span class="leaderboard-stat">${stat}</span>
+        `;
+        leftList.appendChild(item);
+    });
+
+    // 更新右侧排行榜（阵营）
+    rightList.innerHTML = '';
+    rightData.forEach((team, index) => {
+        const item = document.createElement('div');
+        item.className = 'leaderboard-item';
+        const stat = leaderboardMode === 'kills' ? team.kills : Math.round(team.damageDealt);
+
+        item.innerHTML = `
+            <span class="leaderboard-rank">${index + 1}.</span>
+            <span class="leaderboard-name" style="color: ${TEAM_COLORS[team.team]}">阵营${team.team + 1}</span>
+            <span class="leaderboard-stat">${stat}</span>
+        `;
+        rightList.appendChild(item);
+    });
+}
+
+// 排行榜切换功能（HTML版本）
+function toggleLeaderboardMode() {
+    leaderboardMode = leaderboardMode === 'kills' ? 'damage' : 'kills';
+    updateHtmlLeaderboards();
+}
+
+// 立刻结束游戏
+function endGameImmediately() {
+    // 隐藏暂停菜单
+    const pauseMenu = document.getElementById('pauseMenu');
+    if (pauseMenu) {
+        pauseMenu.classList.remove('show');
+    }
+
+    // 取消暂停状态
+    gamePaused = false;
+
+    // 获取当前存活的玩家
+    const alivePlayers = [];
+    for (let i = 0; i < gameSettings.playerCount; i++) {
+        const playerObj = getPlayerObject(i);
+        if (playerObj && playerObj.isAlive && playerObj.health > 0) {
+            alivePlayers.push(playerObj);
+        }
+    }
+
+    // 强制结束游戏
+    gameOver = true;
+    winner = "游戏被强制结束";
+
+    // 计算游戏统计
+    if (alivePlayers.length > 0) {
+        // 如果有存活玩家，设置获胜阵营为第一个存活玩家的阵营
+        const winningTeam = alivePlayers[0].team;
+        winner = `阵营 ${winningTeam + 1} (强制结束)`;
+        calculateLeaderboards(alivePlayers, winningTeam);
+    } else {
+        // 如果没有存活玩家，创建空的排行榜
+        gameStats = {
+            alivePlayers: [],
+            killLeaderboard: [],
+            damageLeaderboard: [],
+            teamKillLeaderboard: [],
+            teamDamageLeaderboard: [],
+            winningTeam: -1
+        };
+    }
 }
 
 function updatePlayerSettings() {
@@ -974,8 +1262,15 @@ function updatePlayerSettings() {
         const teamName = ['红', '蓝', '绿', '黄', '粉', '青'][player.team] || `阵营${player.team + 1}`;
         const playerDiv = document.createElement('div');
         playerDiv.className = 'player-settings';
+        const playerName = player.name || `玩家${i + 1}`;
         playerDiv.innerHTML = `
-            <h3 style="color: ${player.color || PLAYER_COLORS[i % PLAYER_COLORS.length]}">${player.name || `玩家${i + 1}`} (${teamName}阵营)</h3>
+            <h3 style="color: ${player.color || PLAYER_COLORS[i % PLAYER_COLORS.length]}" id="playerTitle${i}">${playerName} (${teamName}阵营)</h3>
+
+            <div class="settings-group">
+                <label for="playerName${i}">玩家名字:</label>
+                <input type="text" id="playerName${i}" name="playerName${i}" value="${player.name || `玩家${i + 1}`}" maxlength="10" oninput="validatePlayerName(${i})">
+                <span id="nameError${i}" class="name-error" style="color: red; font-size: 12px; display: none;">名字不能重复</span>
+            </div>
 
             <div class="settings-group">
                 <label for="teamSelect${i}">阵营:</label>
@@ -1119,7 +1414,26 @@ function startGame() {
     const playerCount = parseInt(document.getElementById('playerCount').value);
     gameSettings.playerCount = playerCount;
 
+    // 验证所有玩家名字
+    let hasErrors = false;
     for (let i = 0; i < playerCount; i++) {
+        if (!validatePlayerName(i)) {
+            hasErrors = true;
+        }
+    }
+
+    if (hasErrors) {
+        alert('请修正玩家名字错误后再开始游戏！');
+        return;
+    }
+
+    for (let i = 0; i < playerCount; i++) {
+        // 保存玩家名字
+        const nameInput = document.getElementById(`playerName${i}`);
+        if (nameInput && gameSettings.players[i]) {
+            gameSettings.players[i].name = nameInput.value.trim();
+        }
+
         // 保存阵营选择
         const teamSelect = document.getElementById(`teamSelect${i}`);
         if (teamSelect && gameSettings.players[i]) {
@@ -1148,6 +1462,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // 游戏初始化
 function initGame() {
+    // 隐藏暂停菜单和结束界面
+    const pauseMenu = document.getElementById('pauseMenu');
+    if (pauseMenu) {
+        pauseMenu.classList.remove('show');
+    }
+
+    const endScreen = document.getElementById('gameEndScreen');
+    if (endScreen) {
+        endScreen.classList.remove('show');
+    }
+
     // 确保玩家数据已初始化
     if (!gameSettings.players || gameSettings.players.length === 0) {
         console.log('Initializing players in initGame');
@@ -1260,6 +1585,16 @@ document.addEventListener('keydown', (event) => {
 
     if (gameOver && event.key === 'r') { // 假设R键重启
         initGame();
+        return;
+    }
+
+    // ESC键暂停/恢复游戏
+    if (event.key === 'Escape' && !gameOver) {
+        if (gamePaused) {
+            resumeGame();
+        } else {
+            pauseGame();
+        }
         return;
     }
 
@@ -1498,7 +1833,7 @@ function drawGameEndScreen() {
     let yPos = 130;
     gameStats.alivePlayers.forEach(player => {
         ctx.fillStyle = player.color;
-        ctx.fillText(`玩家 ${player.playerId} (${player.playerName})`, SCREEN_WIDTH / 2, yPos);
+        ctx.fillText(player.playerName, SCREEN_WIDTH / 2, yPos);
         yPos += 30;
     });
 
@@ -1544,7 +1879,7 @@ function drawLeaderboards(centerX, startY) {
         const stat = leaderboardMode === 'kills' ? player.kills : Math.round(player.damageDealt);
 
         ctx.fillStyle = player.color;
-        ctx.fillText(`${index + 1}. 玩家${player.playerId}`, leftX, y);
+        ctx.fillText(`${index + 1}. ${player.playerName}`, leftX, y);
 
         ctx.fillStyle = 'rgb(64, 64, 64)'; // 深灰色文字
         ctx.fillText(stat.toString(), leftX + 120, y);
@@ -1843,42 +2178,18 @@ function gameLoop(currentTime) {
             }
         }
 
-        // 显示暂停状态
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-        ctx.fillStyle = WHITE;
-        ctx.font = '48px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('游戏暂停 - 设置中', SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
-
         return;
     }
 
-    // 如果游戏结束，只显示结束界面
+    // 如果游戏结束，显示HTML结束界面
     if (gameOver) {
-        if (gameStats) {
-            drawGameEndScreen();
-        } else {
-            ctx.fillStyle = BLACK;
-            ctx.font = '48px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText(`${winner} Wins!`, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 20);
-        }
-        restartButton.draw();
+        showHtmlEndScreen();
         return;
     }
 
-    // 如果游戏结束，只显示结束界面
+    // 如果游戏结束，显示HTML结束界面
     if (gameOver) {
-        if (gameStats) {
-            drawGameEndScreen();
-        } else {
-            ctx.fillStyle = BLACK;
-            ctx.font = '48px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText(`${winner} Wins!`, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 20);
-        }
-        restartButton.draw();
+        showHtmlEndScreen();
         return;
     }
 
