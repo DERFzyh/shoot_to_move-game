@@ -666,28 +666,176 @@ function generateMap() {
     return walls;
 }
 
+// 游戏设置变量
+let gameSettings = {
+    playerCount: 2,
+    players: [
+        {
+            id: 1,
+            color: BLUE,
+            name: "玩家1",
+            controls: {
+                aimMode: "keys", // "keys" 或 "mouse"
+                leftKey: "a",
+                rightKey: "d",
+                shootKey: "w",
+                shieldKey: "s"
+            }
+        },
+        {
+            id: 2,
+            color: RED,
+            name: "玩家2",
+            controls: {
+                aimMode: "keys", // "keys" 或 "mouse"
+                leftKey: "ArrowLeft",
+                rightKey: "ArrowRight",
+                shootKey: " ",
+                shieldKey: "Shift"
+            }
+        }
+    ]
+};
+
 // 游戏状态变量
 let player1, player2, joystick1, joystick2, button1, button2, button1Shield, button2Shield, restartButton;
 let bullets = [];
 let walls = [];
 let gameOver = false;
 let winner = null;
-let showTouchControls = true; // 默认显示按钮
+let showTouchControls = false; // 默认不显示触控按钮，根据设备类型决定
 let lastKeyboardEventTime = 0; // 记录最后一次键盘事件的时间
+let lastMouseEventTime = 0; // 记录最后一次鼠标事件的时间
+let lastTouchEventTime = 0; // 记录最后一次触摸事件的时间
 const HIDE_DELAY = 5; // 键盘事件后隐藏按钮的延迟时间（秒）
+let mouseX = 0; // 鼠标X坐标
+let mouseY = 0; // 鼠标Y坐标
+
+// 检测设备类型
+function isTouchDevice() {
+    return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+}
+
+// 设置界面函数
+function toggleSettings() {
+    const panel = document.getElementById('settingsPanel');
+    panel.classList.toggle('show');
+    if (panel.classList.contains('show')) {
+        updatePlayerSettings();
+    }
+}
+
+function updatePlayerSettings() {
+    const playerCount = parseInt(document.getElementById('playerCount').value);
+    gameSettings.playerCount = playerCount;
+
+    const playerSettingsDiv = document.getElementById('playerSettings');
+    playerSettingsDiv.innerHTML = '';
+
+    for (let i = 0; i < playerCount; i++) {
+        const player = gameSettings.players[i];
+        const playerDiv = document.createElement('div');
+        playerDiv.className = 'player-settings';
+        playerDiv.innerHTML = `
+            <h3 style="color: ${player.color === BLUE ? '#0000FF' : '#FF0000'}">${player.name}</h3>
+
+            <div class="settings-group">
+                <label>朝向控制方式:</label>
+                <div class="radio-group">
+                    <label>
+                        <input type="radio" name="aimMode${i}" value="keys" ${player.controls.aimMode === 'keys' ? 'checked' : ''}>
+                        按键控制 (左转/右转)
+                    </label>
+                    <label>
+                        <input type="radio" name="aimMode${i}" value="mouse" ${player.controls.aimMode === 'mouse' ? 'checked' : ''}>
+                        始终对准鼠标
+                    </label>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>左转键:</label>
+                <input type="text" id="leftKey${i}" value="${player.controls.leftKey}" maxlength="1" readonly onclick="startKeyCapture(${i}, 'leftKey')">
+            </div>
+
+            <div class="control-group">
+                <label>右转键:</label>
+                <input type="text" id="rightKey${i}" value="${player.controls.rightKey}" maxlength="1" readonly onclick="startKeyCapture(${i}, 'rightKey')">
+            </div>
+
+            <div class="control-group">
+                <label>射击键:</label>
+                <input type="text" id="shootKey${i}" value="${player.controls.shootKey}" maxlength="1" readonly onclick="startKeyCapture(${i}, 'shootKey')">
+            </div>
+
+            <div class="control-group">
+                <label>护盾键:</label>
+                <input type="text" id="shieldKey${i}" value="${player.controls.shieldKey}" maxlength="1" readonly onclick="startKeyCapture(${i}, 'shieldKey')">
+            </div>
+        `;
+        playerSettingsDiv.appendChild(playerDiv);
+    }
+}
+
+let keyCapturePlayer = null;
+let keyCaptureType = null;
+
+function startKeyCapture(playerIndex, keyType) {
+    keyCapturePlayer = playerIndex;
+    keyCaptureType = keyType;
+    document.addEventListener('keydown', captureKey);
+    document.getElementById(keyType + playerIndex).style.backgroundColor = '#ffffcc';
+}
+
+function captureKey(event) {
+    if (keyCapturePlayer !== null && keyCaptureType !== null) {
+        event.preventDefault();
+        let keyValue = event.key;
+        if (keyValue === ' ') keyValue = ' '; // 空格键特殊处理
+
+        gameSettings.players[keyCapturePlayer].controls[keyCaptureType] = keyValue;
+        document.getElementById(keyCaptureType + keyCapturePlayer).value = keyValue;
+        document.getElementById(keyCaptureType + keyCapturePlayer).style.backgroundColor = '';
+
+        document.removeEventListener('keydown', captureKey);
+        keyCapturePlayer = null;
+        keyCaptureType = null;
+    }
+}
+
+function startGame() {
+    // 保存设置
+    const playerCount = parseInt(document.getElementById('playerCount').value);
+    gameSettings.playerCount = playerCount;
+
+    for (let i = 0; i < playerCount; i++) {
+        const aimMode = document.querySelector(`input[name="aimMode${i}"]:checked`).value;
+        gameSettings.players[i].controls.aimMode = aimMode;
+    }
+
+    // 隐藏设置面板
+    toggleSettings();
+
+    // 初始化游戏
+    initGame();
+}
 
 // 游戏初始化
 function initGame() {
-    player1 = new Player(SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2, BLUE);
-    player2 = new Player(3 * SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2, RED);
+    // 根据设置创建玩家
+    if (gameSettings.playerCount >= 1) {
+        player1 = new Player(SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2, BLUE);
+        joystick1 = new Joystick(100, 150);
+        button1 = new Button(50, 250, 100, 50, "Shoot");
+        button1Shield = new Button(50, 350, 100, 50, "Shield");
+    }
 
-    joystick1 = new Joystick(100, 150);
-    button1 = new Button(50, 250, 100, 50, "Shoot");
-    button1Shield = new Button(50, 350, 100, 50, "Shield");
-
-    joystick2 = new Joystick(SCREEN_WIDTH - 100, SCREEN_HEIGHT - 150);
-    button2 = new Button(SCREEN_WIDTH - 150, SCREEN_HEIGHT - 250, 100, 50, "Shoot");
-    button2Shield = new Button(SCREEN_WIDTH - 150, SCREEN_HEIGHT - 350, 100, 50, "Shield");
+    if (gameSettings.playerCount >= 2) {
+        player2 = new Player(3 * SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2, RED);
+        joystick2 = new Joystick(SCREEN_WIDTH - 100, SCREEN_HEIGHT - 150);
+        button2 = new Button(SCREEN_WIDTH - 150, SCREEN_HEIGHT - 250, 100, 50, "Shoot");
+        button2Shield = new Button(SCREEN_WIDTH - 150, SCREEN_HEIGHT - 350, 100, 50, "Shield");
+    }
 
     restartButton = new Button(SCREEN_WIDTH / 2 - 50, SCREEN_HEIGHT / 2 + 50, 100, 50, "Restart");
 
@@ -696,6 +844,9 @@ function initGame() {
     gameOver = false;
     winner = null;
     effectCtx.clearRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT); // 清空效果画布
+
+    // 根据设备类型设置初始触控显示状态
+    showTouchControls = isTouchDevice();
 }
 
 // 绘制状态信息
@@ -703,32 +854,36 @@ function drawStatus() {
     ctx.font = '24px Arial';
 
     // 玩家1状态
-    let statusText1;
-    if (player1.shieldActive) {
-        const remainingTime = Math.max(0, player1.shieldDuration - (Date.now() - player1.shieldStartTime) / 1000);
-        statusText1 = `P1 Shield: ${remainingTime.toFixed(1)}s`;
-    } else if (player1.shieldCooldown > 0) {
-        statusText1 = `P1 Shield CD: ${player1.shieldCooldown.toFixed(1)}s`;
-    } else {
-        statusText1 = "P1 Shield Ready";
+    if (gameSettings.playerCount >= 1) {
+        let statusText1;
+        if (player1.shieldActive) {
+            const remainingTime = Math.max(0, player1.shieldDuration - (Date.now() - player1.shieldStartTime) / 1000);
+            statusText1 = `P1 Shield: ${remainingTime.toFixed(1)}s`;
+        } else if (player1.shieldCooldown > 0) {
+            statusText1 = `P1 Shield CD: ${player1.shieldCooldown.toFixed(1)}s`;
+        } else {
+            statusText1 = "P1 Shield Ready";
+        }
+        ctx.fillStyle = BLUE;
+        ctx.textAlign = 'left';
+        ctx.fillText(statusText1, 10, 50);
     }
-    ctx.fillStyle = BLUE;
-    ctx.textAlign = 'left';
-    ctx.fillText(statusText1, 10, 50);
 
     // 玩家2状态
-    let statusText2;
-    if (player2.shieldActive) {
-        const remainingTime = Math.max(0, player2.shieldDuration - (Date.now() - player2.shieldStartTime) / 1000);
-        statusText2 = `P2 Shield: ${remainingTime.toFixed(1)}s`;
-    } else if (player2.shieldCooldown > 0) {
-        statusText2 = `P2 Shield CD: ${player2.shieldCooldown.toFixed(1)}s`;
-    } else {
-        statusText2 = "P2 Shield Ready";
+    if (gameSettings.playerCount >= 2) {
+        let statusText2;
+        if (player2.shieldActive) {
+            const remainingTime = Math.max(0, player2.shieldDuration - (Date.now() - player2.shieldStartTime) / 1000);
+            statusText2 = `P2 Shield: ${remainingTime.toFixed(1)}s`;
+        } else if (player2.shieldCooldown > 0) {
+            statusText2 = `P2 Shield CD: ${player2.shieldCooldown.toFixed(1)}s`;
+        } else {
+            statusText2 = "P2 Shield Ready";
+        }
+        ctx.fillStyle = RED;
+        ctx.textAlign = 'right';
+        ctx.fillText(statusText2, SCREEN_WIDTH - 10, 50);
     }
-    ctx.fillStyle = RED;
-    ctx.textAlign = 'right';
-    ctx.fillText(statusText2, SCREEN_WIDTH - 10, 50);
 }
 
 // 键盘事件处理
@@ -744,18 +899,30 @@ document.addEventListener('keydown', (event) => {
     }
 
     if (!gameOver) {
-        if (event.key === 'w' && !player1.isShieldActive()) {
-            bullets.push(new Bullet(player1.x, player1.y, player1.angle + Math.PI, BLUE, player1));
-            player1.pushBack(2, player1.angle);
-        } else if (event.key === ' ' && !player2.isShieldActive()) { // Spacebar
-            bullets.push(new Bullet(player2.x, player2.y, player2.angle + Math.PI, RED, player2));
-            player2.pushBack(2, player2.angle);
-        } else if (event.key === 't') {
+        // 检查玩家1的键位
+        if (gameSettings.playerCount >= 1) {
+            const p1Controls = gameSettings.players[0].controls;
+            if (event.key === p1Controls.shootKey && !player1.isShieldActive()) {
+                bullets.push(new Bullet(player1.x, player1.y, player1.angle + Math.PI, BLUE, player1));
+                player1.pushBack(2, player1.angle);
+            } else if (event.key === p1Controls.shieldKey) {
+                player1.activateShield();
+            }
+        }
+
+        // 检查玩家2的键位
+        if (gameSettings.playerCount >= 2) {
+            const p2Controls = gameSettings.players[1].controls;
+            if (event.key === p2Controls.shootKey && !player2.isShieldActive()) {
+                bullets.push(new Bullet(player2.x, player2.y, player2.angle + Math.PI, RED, player2));
+                player2.pushBack(2, player2.angle);
+            } else if (event.key === p2Controls.shieldKey) {
+                player2.activateShield();
+            }
+        }
+
+        if (event.key === 't') {
             showTouchControls = !showTouchControls;
-        } else if (event.key === 's') { // 玩家1激活防护罩
-            player1.activateShield();
-        } else if (event.key === 'Shift') { // 玩家2激活防护罩 (左Shift或右Shift)
-            player2.activateShield();
         }
     }
 });
@@ -763,10 +930,20 @@ document.addEventListener('keydown', (event) => {
 document.addEventListener('keyup', (event) => {
     keysPressed[event.key] = false;
 
-    if (event.key === 's') {
-        player1.deactivateShield();
-    } else if (event.key === 'Shift') {
-        player2.deactivateShield();
+    // 检查玩家1的护盾键
+    if (gameSettings.playerCount >= 1) {
+        const p1Controls = gameSettings.players[0].controls;
+        if (event.key === p1Controls.shieldKey) {
+            player1.deactivateShield();
+        }
+    }
+
+    // 检查玩家2的护盾键
+    if (gameSettings.playerCount >= 2) {
+        const p2Controls = gameSettings.players[1].controls;
+        if (event.key === p2Controls.shieldKey) {
+            player2.deactivateShield();
+        }
     }
 });
 
@@ -775,7 +952,7 @@ let activeTouches = {}; // 存储当前活跃的触摸点
 
 canvas.addEventListener('touchstart', (event) => {
     event.preventDefault(); // 阻止默认的触摸行为，如页面滚动
-    lastKeyboardEventTime = Date.now(); // 触摸事件也视为用户活动
+    lastTouchEventTime = Date.now(); // 记录触摸事件时间
     for (const touch of event.changedTouches) {
         const pos = { x: touch.clientX - canvas.getBoundingClientRect().left, y: touch.clientY - canvas.getBoundingClientRect().top };
         activeTouches[touch.identifier] = { x: pos.x, y: pos.y };
@@ -786,20 +963,29 @@ canvas.addEventListener('touchstart', (event) => {
                 break;
             }
         } else {
-            if (button1.isPressed(pos)) {
+            let handled = false;
+            if (gameSettings.playerCount >= 1 && button1.isPressed(pos)) {
                 bullets.push(new Bullet(player1.x, player1.y, player1.angle + Math.PI, BLUE, player1));
                 player1.pushBack(2, player1.angle);
-            } else if (button2.isPressed(pos)) {
+                handled = true;
+            } else if (gameSettings.playerCount >= 2 && button2.isPressed(pos)) {
                 bullets.push(new Bullet(player2.x, player2.y, player2.angle + Math.PI, RED, player2));
                 player2.pushBack(2, player2.angle);
-            } else if (button1Shield.isPressed(pos)) {
+                handled = true;
+            } else if (gameSettings.playerCount >= 1 && button1Shield.isPressed(pos)) {
                 player1.activateShield();
-            } else if (button2Shield.isPressed(pos)) {
+                handled = true;
+            } else if (gameSettings.playerCount >= 2 && button2Shield.isPressed(pos)) {
                 player2.activateShield();
-            } else if (pos.x < SCREEN_WIDTH / 2) {
-                joystick1.update(pos);
-            } else {
-                joystick2.update(pos);
+                handled = true;
+            }
+
+            if (!handled) {
+                if (pos.x < SCREEN_WIDTH / 2 && gameSettings.playerCount >= 1) {
+                    joystick1.update(pos);
+                } else if (pos.x >= SCREEN_WIDTH / 2 && gameSettings.playerCount >= 2) {
+                    joystick2.update(pos);
+                }
             }
         }
     }
@@ -807,14 +993,14 @@ canvas.addEventListener('touchstart', (event) => {
 
 canvas.addEventListener('touchmove', (event) => {
     event.preventDefault();
-    lastKeyboardEventTime = Date.now();
+    lastTouchEventTime = Date.now();
     if (!gameOver) {
         for (const touch of event.changedTouches) {
             const pos = { x: touch.clientX - canvas.getBoundingClientRect().left, y: touch.clientY - canvas.getBoundingClientRect().top };
             activeTouches[touch.identifier] = { x: pos.x, y: pos.y };
-            if (pos.x < SCREEN_WIDTH / 2) {
+            if (pos.x < SCREEN_WIDTH / 2 && gameSettings.playerCount >= 1) {
                 joystick1.update(pos);
-            } else {
+            } else if (pos.x >= SCREEN_WIDTH / 2 && gameSettings.playerCount >= 2) {
                 joystick2.update(pos);
             }
         }
@@ -823,26 +1009,38 @@ canvas.addEventListener('touchmove', (event) => {
 
 canvas.addEventListener('touchend', (event) => {
     event.preventDefault();
-    lastKeyboardEventTime = Date.now();
+    lastTouchEventTime = Date.now();
     for (const touch of event.changedTouches) {
         const pos = { x: touch.clientX - canvas.getBoundingClientRect().left, y: touch.clientY - canvas.getBoundingClientRect().top };
         delete activeTouches[touch.identifier];
 
-        if (button1Shield.isPressed(pos)) {
+        if (gameSettings.playerCount >= 1 && button1Shield.isPressed(pos)) {
             player1.deactivateShield();
-        } else if (button2Shield.isPressed(pos)) {
+        } else if (gameSettings.playerCount >= 2 && button2Shield.isPressed(pos)) {
             player2.deactivateShield();
         }
 
-        if (pos.x < SCREEN_WIDTH / 2) {
+        if (pos.x < SCREEN_WIDTH / 2 && gameSettings.playerCount >= 1) {
             joystick1.dx = 0;
             joystick1.dy = 0;
-        } else {
+        } else if (pos.x >= SCREEN_WIDTH / 2 && gameSettings.playerCount >= 2) {
             joystick2.dx = 0;
             joystick2.dy = 0;
         }
     }
 }, { passive: false });
+
+// 鼠标事件处理
+canvas.addEventListener('mousemove', (event) => {
+    const rect = canvas.getBoundingClientRect();
+    mouseX = event.clientX - rect.left;
+    mouseY = event.clientY - rect.top;
+    lastMouseEventTime = Date.now();
+});
+
+canvas.addEventListener('mousedown', (event) => {
+    lastMouseEventTime = Date.now();
+});
 
 // 游戏主循环
 function gameLoop(currentTime) {
@@ -864,25 +1062,57 @@ function gameLoop(currentTime) {
     }
 
     // 处理键盘控制玩家旋转
-    if (keysPressed['a']) player1.angle -= 0.1;
-    if (keysPressed['d']) player1.angle += 0.1;
-    if (keysPressed['ArrowLeft']) player2.angle -= 0.1;
-    if (keysPressed['ArrowRight']) player2.angle += 0.1;
+    if (gameSettings.playerCount >= 1) {
+        const p1Controls = gameSettings.players[0].controls;
+        if (p1Controls.aimMode === 'keys') {
+            if (keysPressed[p1Controls.leftKey]) player1.angle -= 0.1;
+            if (keysPressed[p1Controls.rightKey]) player1.angle += 0.1;
+        }
+    }
+
+    if (gameSettings.playerCount >= 2) {
+        const p2Controls = gameSettings.players[1].controls;
+        if (p2Controls.aimMode === 'keys') {
+            if (keysPressed[p2Controls.leftKey]) player2.angle -= 0.1;
+            if (keysPressed[p2Controls.rightKey]) player2.angle += 0.1;
+        }
+    }
 
     if (!gameOver) {
         // 更新玩家朝向
-        if (joystick1.dx !== 0 || joystick1.dy !== 0) {
-            player1.rotate(Math.atan2(joystick1.dy, joystick1.dx));
+        if (gameSettings.playerCount >= 1) {
+            const p1Controls = gameSettings.players[0].controls;
+            if (p1Controls.aimMode === 'mouse') {
+                // 鼠标对准模式
+                const angleToMouse = Math.atan2(mouseY - player1.y, mouseX - player1.x);
+                player1.rotate(angleToMouse);
+            } else if (joystick1.dx !== 0 || joystick1.dy !== 0) {
+                // 摇杆控制
+                player1.rotate(Math.atan2(joystick1.dy, joystick1.dx));
+            }
         }
-        if (joystick2.dx !== 0 || joystick2.dy !== 0) {
-            player2.rotate(Math.atan2(joystick2.dy, joystick2.dx));
+
+        if (gameSettings.playerCount >= 2) {
+            const p2Controls = gameSettings.players[1].controls;
+            if (p2Controls.aimMode === 'mouse') {
+                // 鼠标对准模式
+                const angleToMouse = Math.atan2(mouseY - player2.y, mouseX - player2.x);
+                player2.rotate(angleToMouse);
+            } else if (joystick2.dx !== 0 || joystick2.dy !== 0) {
+                // 摇杆控制
+                player2.rotate(Math.atan2(joystick2.dy, joystick2.dx));
+            }
         }
 
         // 移动玩家
-        player1.move(walls);
-        player2.move(walls);
-        player1.update(deltaTime);
-        player2.update(deltaTime);
+        if (gameSettings.playerCount >= 1) {
+            player1.move(walls);
+            player1.update(deltaTime);
+        }
+        if (gameSettings.playerCount >= 2) {
+            player2.move(walls);
+            player2.update(deltaTime);
+        }
 
         // 移动子弹
         for (let i = bullets.length - 1; i >= 0; i--) {
@@ -901,14 +1131,14 @@ function gameLoop(currentTime) {
             if (!bullet.isActive()) continue; // 子弹射出后前0.2秒不判定击中
 
             // 检测防护罩
-            if (player1.isShieldActive() && Math.hypot(bullet.x - player1.x, bullet.y - player1.y) < player1.shieldRadius) {
+            if (gameSettings.playerCount >= 1 && player1.isShieldActive() && Math.hypot(bullet.x - player1.x, bullet.y - player1.y) < player1.shieldRadius) {
                 bullet.explode(walls);
                 bullets.splice(i, 1);
                 player1.deactivateShield();
                 player1.shieldCooldown = 1;
                 continue;
             }
-            if (player2.isShieldActive() && Math.hypot(bullet.x - player2.x, bullet.y - player2.y) < player2.shieldRadius) {
+            if (gameSettings.playerCount >= 2 && player2.isShieldActive() && Math.hypot(bullet.x - player2.x, bullet.y - player2.y) < player2.shieldRadius) {
                 bullet.explode(walls);
                 bullets.splice(i, 1);
                 player2.deactivateShield();
@@ -917,24 +1147,26 @@ function gameLoop(currentTime) {
             }
 
             // 忽略与发射者的碰撞
-            if (bullet.owner === player1) {
-                if (Math.hypot(bullet.x - player2.x, bullet.y - player2.y) < player2.size + bullet.radius) {
-                    player2.health -= 10;
-                    bullet.explode(walls);
-                    bullets.splice(i, 1);
-                    if (player2.health <= 0) {
-                        gameOver = true;
-                        winner = "Player 1";
+            if (gameSettings.playerCount >= 2) {
+                if (bullet.owner === player1) {
+                    if (Math.hypot(bullet.x - player2.x, bullet.y - player2.y) < player2.size + bullet.radius) {
+                        player2.health -= 10;
+                        bullet.explode(walls);
+                        bullets.splice(i, 1);
+                        if (player2.health <= 0) {
+                            gameOver = true;
+                            winner = "Player 1";
+                        }
                     }
-                }
-            } else if (bullet.owner === player2) {
-                if (Math.hypot(bullet.x - player1.x, bullet.y - player1.y) < player1.size + bullet.radius) {
-                    player1.health -= 10;
-                    bullet.explode(walls);
-                    bullets.splice(i, 1);
-                    if (player1.health <= 0) {
-                        gameOver = true;
-                        winner = "Player 2";
+                } else if (bullet.owner === player2) {
+                    if (Math.hypot(bullet.x - player1.x, bullet.y - player1.y) < player1.size + bullet.radius) {
+                        player1.health -= 10;
+                        bullet.explode(walls);
+                        bullets.splice(i, 1);
+                        if (player1.health <= 0) {
+                            gameOver = true;
+                            winner = "Player 2";
+                        }
                     }
                 }
             }
@@ -942,8 +1174,12 @@ function gameLoop(currentTime) {
     }
 
     // 绘制玩家
-    player1.draw();
-    player2.draw();
+    if (gameSettings.playerCount >= 1) {
+        player1.draw();
+    }
+    if (gameSettings.playerCount >= 2) {
+        player2.draw();
+    }
 
     // 绘制子弹 (子弹轨迹在effectCanvas上)
     for (const bullet of bullets) {
@@ -951,25 +1187,38 @@ function gameLoop(currentTime) {
     }
 
     // 绘制摇杆和按钮
-    const currentTimeInSeconds = Date.now() / 1000;
-    const keyboardInactiveTime = (currentTimeInSeconds - lastKeyboardEventTime / 1000);
-    
-    if (showTouchControls || keyboardInactiveTime > HIDE_DELAY) {
-        joystick1.draw();
-        joystick2.draw();
-        button1.draw();
-        button2.draw();
-        button1Shield.draw();
-        button2Shield.draw();
+    const now = Date.now();
+    const keyboardInactiveTime = (now - lastKeyboardEventTime) / 1000;
+    const mouseInactiveTime = (now - lastMouseEventTime) / 1000;
+    const touchInactiveTime = (now - lastTouchEventTime) / 1000;
+
+    // 如果检测到触摸事件，显示触控按钮；如果检测到键盘或鼠标事件，隐藏触控按钮
+    const shouldShowTouchControls = showTouchControls || (touchInactiveTime <= HIDE_DELAY && (keyboardInactiveTime > HIDE_DELAY && mouseInactiveTime > HIDE_DELAY));
+
+    if (shouldShowTouchControls) {
+        if (gameSettings.playerCount >= 1) {
+            joystick1.draw();
+            button1.draw();
+            button1Shield.draw();
+        }
+        if (gameSettings.playerCount >= 2) {
+            joystick2.draw();
+            button2.draw();
+            button2Shield.draw();
+        }
     }
 
     // 绘制血量
     ctx.fillStyle = BLACK;
     ctx.font = '32px Arial';
     ctx.textAlign = 'left';
-    ctx.fillText(`P1 Health: ${player1.health}`, 10, 30);
+    if (gameSettings.playerCount >= 1) {
+        ctx.fillText(`P1 Health: ${player1.health}`, 10, 30);
+    }
     ctx.textAlign = 'right';
-    ctx.fillText(`P2 Health: ${player2.health}`, SCREEN_WIDTH - 10, 30);
+    if (gameSettings.playerCount >= 2) {
+        ctx.fillText(`P2 Health: ${player2.health}`, SCREEN_WIDTH - 10, 30);
+    }
 
     // 游戏结束逻辑
     if (gameOver) {
