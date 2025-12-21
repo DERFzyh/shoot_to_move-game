@@ -131,7 +131,7 @@
 
         .settings-toggle-btn {
             position: absolute;
-            top: 10px;
+            top: 30px;
             right: 10px;
             padding: 8px 16px;
             font-size: 14px;
@@ -141,11 +141,25 @@
             border-radius: 5px;
             cursor: pointer;
         }
+
+        .key-capture-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.1);
+            z-index: 10000;
+            cursor: default;
+        }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas" width="800" height="600"></canvas>
     <button class="settings-toggle-btn" onclick="toggleSettings()">设置</button>
+
+    <!-- 全屏遮罩层，用于录制按键时覆盖整个屏幕 -->
+    <div id="keyCaptureOverlay" class="key-capture-overlay" style="display: none;"></div>
 
     <div id="settingsPanel" class="settings-panel">
         <h2>游戏设置</h2>
@@ -153,8 +167,19 @@
         <div class="settings-group">
             <label for="playerCount">玩家人数:</label>
             <select id="playerCount" onchange="updatePlayerSettings()">
+                <option value="0">0人 (仅观察)</option>
                 <option value="1">1人</option>
                 <option value="2" selected>2人</option>
+                <option value="3">3人</option>
+                <option value="4">4人</option>
+                <option value="5">5人</option>
+                <option value="6">6人</option>
+                <option value="7">7人</option>
+                <option value="8">8人</option>
+                <option value="9">9人</option>
+                <option value="10">10人</option>
+                <option value="11">11人</option>
+                <option value="12">12人</option>
             </select>
         </div>
 
