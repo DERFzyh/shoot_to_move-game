@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,138 +15,348 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-color: #f0f0f0;
             font-family: 'Arial', sans-serif;
+            color: #333;
+            position: relative;
+        }
+
+        #mazeCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            opacity: 0.3;
         }
 
         .main-container {
-            text-align: center;
-            color: white;
-            max-width: 800px;
+            background-color: rgba(255, 255, 255, 0.95);
+            border: 2px solid #333;
+            border-radius: 15px;
             padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            backdrop-filter: blur(10px);
         }
 
         .game-title {
-            font-size: 72px;
+            font-size: 48px;
             font-weight: bold;
-            margin-bottom: 20px;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-            background: linear-gradient(45deg, #ffffff, #e0e0e0);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            margin-bottom: 10px;
+            color: #333;
         }
 
         .game-subtitle {
-            font-size: 24px;
-            margin-bottom: 60px;
-            opacity: 0.9;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+            font-size: 18px;
+            margin-bottom: 30px;
+            color: #666;
+            font-weight: normal;
         }
 
         .menu-button {
             display: inline-block;
-            padding: 20px 40px;
-            font-size: 24px;
+            padding: 15px 30px;
+            font-size: 20px;
             font-weight: bold;
             text-decoration: none;
             color: white;
-            background: linear-gradient(45deg, #4CAF50, #45a049);
+            background-color: #acacac;
             border: none;
-            border-radius: 15px;
+            border-radius: 8px;
             cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
             margin: 10px;
         }
 
         .menu-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 20px rgba(0, 0, 0, 0.4);
-            background: linear-gradient(45deg, #45a049, #4CAF50);
+            background-color: #474747;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
         }
 
         .menu-button:active {
             transform: translateY(0);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-        }
-
-        .description {
-            font-size: 18px;
-            margin-top: 40px;
-            opacity: 0.8;
-            line-height: 1.6;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .team-colors {
             display: flex;
             justify-content: center;
-            margin-top: 30px;
-            gap: 10px;
+            margin-top: 25px;
+            gap: 8px;
         }
 
         .color-dot {
-            width: 20px;
-            height: 20px;
+            width: 16px;
+            height: 16px;
             border-radius: 50%;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            border: 1px solid #ddd;
+            transition: transform 0.2s ease;
         }
 
-        .color-dot.red { background-color: #FF0000; }
-        .color-dot.blue { background-color: #0000FF; }
-        .color-dot.green { background-color: #00FF00; }
-        .color-dot.yellow { background-color: #FFFF00; }
-        .color-dot.pink { background-color: #FF00FF; }
-        .color-dot.cyan { background-color: #00FFFF; }
+        .color-dot:hover {
+            transform: scale(1.2);
+        }
+
+        .color-dot.red {
+            background-color: #FF0000;
+        }
+
+        .color-dot.blue {
+            background-color: #0000FF;
+        }
+
+        .color-dot.green {
+            background-color: #00FF00;
+        }
+
+        .color-dot.yellow {
+            background-color: #FFFF00;
+        }
+
+        .color-dot.pink {
+            background-color: #FF00FF;
+        }
+
+        .color-dot.cyan {
+            background-color: #00FFFF;
+        }
+
+        .game-description {
+            font-size: 14px;
+            margin-top: 20px;
+            color: #777;
+            line-height: 1.4;
+        }
 
         @media (max-width: 768px) {
+            .main-container {
+                padding: 30px 20px;
+                margin: 20px;
+            }
+
             .game-title {
-                font-size: 48px;
+                font-size: 36px;
             }
 
             .game-subtitle {
-                font-size: 18px;
+                font-size: 16px;
             }
 
             .menu-button {
-                padding: 15px 30px;
-                font-size: 20px;
-            }
-
-            .main-container {
-                padding: 20px;
+                padding: 12px 24px;
+                font-size: 18px;
             }
         }
     </style>
 </head>
+
 <body>
-    <div class="main-container">
-        <h1 class="game-title">阵营射击大战</h1>
-        <p class="game-subtitle">Team Shooting Battle</p>
+    <canvas id="mazeCanvas"></canvas>
 
-        <button class="menu-button" onclick="startSinglePlayer()">单机游戏</button>
 
-        <div class="team-colors">
-            <div class="color-dot red" title="红阵营"></div>
-            <div class="color-dot blue" title="蓝阵营"></div>
-            <div class="color-dot green" title="绿阵营"></div>
-            <div class="color-dot yellow" title="黄阵营"></div>
-            <div class="color-dot pink" title="粉阵营"></div>
-            <div class="color-dot cyan" title="青阵营"></div>
-        </div>
+    <h1 class="game-title">阵营射击大战</h1>
+    <p class="game-subtitle">Team Shooting Battle</p>
 
-        <div class="description">
-            <p>🎯 选择你的阵营，与队友合作占领地图！</p>
-            <p>🏰 通过战斗占领墙壁，扩大你们的领土范围！</p>
-            <p>⚔️ 击败所有敌对阵营，成为最后的胜利者！</p>
-        </div>
+    <button class="menu-button" onclick="startSinglePlayer()">开始游戏</button>
+
+    <div class="team-colors">
+        <div class="color-dot red" title="红阵营"></div>
+        <div class="color-dot blue" title="蓝阵营"></div>
+        <div class="color-dot green" title="绿阵营"></div>
+        <div class="color-dot yellow" title="黄阵营"></div>
+        <div class="color-dot pink" title="粉阵营"></div>
+        <div class="color-dot cyan" title="青阵营"></div>
     </div>
 
+    <div class="game-description">
+        最多支持12名玩家，6个阵营的战略对抗
+    </div>
+
+
     <script>
+        // 游戏常量
+        const SCREEN_WIDTH = 800;
+        const SCREEN_HEIGHT = 600;
+        const WALL_SIZE = 20;
+        const WHITE = 'rgb(255, 255, 255)';
+        const GRAY = 'rgb(128, 128, 128)';
+        const DARK_GRAY = 'rgb(64, 64, 64)';
+        const LIGHT_GRAY = 'rgb(192, 192, 192)';
+        const TEAM_COLORS = [
+            'rgb(0, 100, 255)',   // 蓝色阵营
+            'rgb(255, 100, 0)',   // 红色阵营
+            'rgb(0, 255, 100)',   // 绿色阵营
+            'rgb(255, 255, 0)',   // 黄色阵营
+            'rgb(255, 0, 255)',   // 粉色阵营
+            'rgb(0, 255, 255)'    // 青色阵营
+        ];
+
+        // Wall类
+        class Wall {
+            constructor(x, y, wallType, team = -1) {
+                this.x = x;
+                this.y = y;
+                this.wallType = wallType;
+                this.team = team;
+                this.color = (wallType === 2) ? (team >= 0 ? TEAM_COLORS[team] : WHITE) : null;
+            }
+
+            draw(ctx) {
+                if (this.wallType === 1) {
+                    ctx.fillStyle = GRAY;
+                    ctx.fillRect(this.x, this.y, WALL_SIZE, WALL_SIZE);
+                    ctx.strokeStyle = DARK_GRAY;
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(this.x, this.y, WALL_SIZE, WALL_SIZE);
+                } else if (this.wallType === 2) {
+                    ctx.fillStyle = this.color;
+                    ctx.fillRect(this.x, this.y, WALL_SIZE, WALL_SIZE);
+                    ctx.strokeStyle = LIGHT_GRAY;
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(this.x, this.y, WALL_SIZE, WALL_SIZE);
+                } else if (this.wallType === 3) {
+                    ctx.fillStyle = LIGHT_GRAY;
+                    ctx.fillRect(this.x, this.y, WALL_SIZE, WALL_SIZE);
+                    ctx.strokeStyle = WHITE;
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(this.x, this.y, WALL_SIZE, WALL_SIZE);
+                }
+            }
+        }
+
+        // 生成迷宫地图
+        function generateMazeMap() {
+            const walls = [];
+
+            // 地图边缘固定为墙1
+            for (let x = 0; x < SCREEN_WIDTH; x += WALL_SIZE) {
+                walls.push(new Wall(x, 0, 1));
+                walls.push(new Wall(x, SCREEN_HEIGHT - WALL_SIZE, 1));
+            }
+            for (let y = WALL_SIZE; y < SCREEN_HEIGHT - WALL_SIZE; y += WALL_SIZE) {
+                walls.push(new Wall(0, y, 1));
+                walls.push(new Wall(SCREEN_WIDTH - WALL_SIZE, y, 1));
+            }
+
+            // 初始化迷宫网格
+            const gridWidth = (SCREEN_WIDTH / WALL_SIZE) - 2;
+            const gridHeight = (SCREEN_HEIGHT / WALL_SIZE) - 2;
+            const grid = Array(gridHeight).fill(0).map(() => Array(gridWidth).fill(1));
+
+            // DFS函数生成迷宫
+            function dfs(x, y) {
+                if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) {
+                    return;
+                }
+
+                grid[y][x] = 0; // 标记为通路
+                // 同时标记相邻的3个单元格为通路
+                if (x + 1 < gridWidth) {
+                    grid[y][x + 1] = 0;
+                }
+                if (y + 1 < gridHeight) {
+                    grid[y + 1][x] = 0;
+                }
+                if (x + 1 < gridWidth && y + 1 < gridHeight) {
+                    grid[y + 1][x + 1] = 0;
+                }
+
+                const directions = [[0, 3], [3, 0], [0, -3], [-3, 0]];
+                // 随机打乱方向
+                for (let i = directions.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [directions[i], directions[j]] = [directions[j], directions[i]];
+                }
+
+                for (const [dx, dy] of directions) {
+                    const nx = x + dx;
+                    const ny = y + dy;
+                    if (nx >= 0 && nx < gridWidth && ny >= 0 && ny < gridHeight && grid[ny][nx] === 1) {
+                        // 打通中间的墙，保持2个单元格的间隔
+                        const midX = x + Math.floor(dx / 3);
+                        const midY = y + Math.floor(dy / 3);
+                        if (midX >= 0 && midX < gridWidth && midY >= 0 && midY < gridHeight) {
+                            grid[midY][midX] = 0;
+                            if (midX + 1 < gridWidth) {
+                                grid[midY][midX + 1] = 0;
+                            }
+                            if (midY + 1 < gridHeight) {
+                                grid[midY + 1][midX] = 0;
+                            }
+                            if (midX + 1 < gridWidth && midY + 1 < gridHeight) {
+                                grid[midY + 1][midX + 1] = 0;
+                            }
+                        }
+                        dfs(nx, ny);
+                    }
+                }
+            }
+
+            // 从随机起点开始生成迷宫
+            const startX = Math.floor(Math.random() * (Math.floor(gridWidth / 2))) * 2;
+            const startY = Math.floor(Math.random() * (Math.floor(gridHeight / 2))) * 2;
+            dfs(startX, startY);
+
+            // 将迷宫网格转换为墙
+            for (let y = 0; y < gridHeight; y++) {
+                for (let x = 0; x < gridWidth; x++) {
+                    if (grid[y][x] === 1) {
+                        // 随机选择墙的类型
+                        const choices = [1, 2, 3];
+                        const weights = [1, 3, 1];
+                        let wallType = 0;
+                        let totalWeight = weights.reduce((a, b) => a + b, 0);
+                        let rand = Math.random() * totalWeight;
+                        for (let i = 0; i < choices.length; i++) {
+                            if (rand < weights[i]) {
+                                wallType = choices[i];
+                                break;
+                            }
+                            rand -= weights[i];
+                        }
+
+                        walls.push(new Wall((x + 1) * WALL_SIZE, (y + 1) * WALL_SIZE, wallType, -1));
+                    }
+                }
+            }
+
+            return walls;
+        }
+
+        // 初始化迷宫背景
+        function initMazeBackground() {
+            const canvas = document.getElementById('mazeCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // 设置canvas大小
+            canvas.width = SCREEN_WIDTH;
+            canvas.height = SCREEN_HEIGHT;
+
+            // 生成迷宫
+            const walls = generateMazeMap();
+
+            // 清空画布
+            ctx.fillStyle = WHITE;
+            ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+            // 绘制墙壁
+            walls.forEach(wall => wall.draw(ctx));
+        }
+
+        // 页面加载完成后初始化迷宫背景
+        window.addEventListener('load', initMazeBackground);
+
         function startSinglePlayer() {
             // 跳转到设置界面
-            window.location.href = 'index.html';
+            window.location.href = 'game/index.html';
         }
     </script>
 </body>
+
 </html>

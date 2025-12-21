@@ -917,7 +917,7 @@ function toggleSettings() {
 
 // 回到主界面
 function backToMainMenu() {
-    window.location.href = 'main.html';
+    window.location.href = '../main.html';
 }
 
 function updatePlayerSettings() {
